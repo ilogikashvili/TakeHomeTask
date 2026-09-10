@@ -1,0 +1,41 @@
+services:
+  backend:
+    build:
+      context: ../backend
+      target: runtime
+    env_file: ../backend/.env.production
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 8s
+      retries: 3
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "5" }
+  web:
+    build:
+      context: ..
+      dockerfile: deploy/web.Dockerfile
+    environment:
+      PUBLIC_HOST: ${PUBLIC_HOST:?Set the DNS hostname of this deployment}
+    ports: ["80:80", "443:443"]
+    volumes: ["caddy_data:/data", "caddy_config:/config"]
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "5" }
+  migrate:
+    profiles: [maintenance]
+    build:
+      context: ../backend
+      target: build
+    environment:
+      DATABASE_URL: ${MIGRATION_DATABASE_URL:?Set the dedicated migration connection}
+    command: ["npx", "prisma", "migrate", "deploy"]
+volumes:
+  caddy_data:
+  caddy_config:

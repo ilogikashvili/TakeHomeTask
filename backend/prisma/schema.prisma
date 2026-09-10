@@ -1,0 +1,195 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum LineItemStatus {
+  DRAFT
+  ACTIVE
+  PENDING_APPROVAL
+  TERMINATED
+}
+
+enum BillingPeriod {
+  WEEKLY
+  MONTHLY
+  QUARTERLY
+  ANNUAL
+}
+
+enum ApprovalAction {
+  CREATED
+  APPROVED
+  REJECTED
+  STATUS_CHANGED
+  OWNER_REASSIGNED
+  UPDATED
+  DELETED
+}
+
+enum NotificationType {
+  RENEWAL_REMINDER
+}
+
+model Owner {
+  id          String         @id @default(uuid()) @db.Uuid
+  name        String
+  email       String         @unique
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  lineItems   LineItem[]
+  approvals   ApprovalEvent[]
+  reminders   Reminder[]
+  notifications Notification[]
+  conversations AssistantConversation[]
+
+  @@index([name])
+}
+
+model RevokedToken {
+  id        String   @id @db.Uuid
+  expiresAt DateTime
+  @@index([expiresAt])
+}
+
+model UsageBucket {
+  key       String   @id
+  count     Int
+  expiresAt DateTime
+  @@index([expiresAt])
+}
+
+model Vendor {
+  id          String     @id @default(uuid()) @db.Uuid
+  name        String
+  normalizedName String
+  category    String
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  lineItems   LineItem[]
+
+  @@index([normalizedName])
+  @@index([category])
+}
+
+model LineItem {
+  id             String         @id @default(uuid()) @db.Uuid
+  vendorId       String         @db.Uuid
+  ownerId        String         @db.Uuid
+  name           String
+  description    String?
+  category       String
+  status         LineItemStatus @default(DRAFT)
+  billingPeriod  BillingPeriod
+  amount         Decimal        @db.Decimal(14, 2)
+  startDate      DateTime       @db.Date
+  endDate        DateTime       @db.Date
+  renewalDate    DateTime?      @db.Date
+  version        Int            @default(1)
+  deletedAt      DateTime?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  vendor         Vendor         @relation(fields: [vendorId], references: [id], onDelete: Restrict)
+  owner          Owner          @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  approvals      ApprovalEvent[]
+  reminders      Reminder[]
+
+  @@index([vendorId, category])
+  @@index([ownerId, renewalDate])
+  @@index([status, renewalDate])
+  @@index([category, status])
+  @@index([renewalDate, id])
+  @@index([amount, id])
+  @@index([startDate, id])
+  @@index([status, id])
+}
+
+model ApprovalEvent {
+  id          String         @id @default(uuid()) @db.Uuid
+  lineItemId  String         @db.Uuid
+  actorId     String         @db.Uuid
+  action      ApprovalAction
+  fromStatus  LineItemStatus?
+  toStatus    LineItemStatus?
+  note        String?
+  createdAt   DateTime       @default(now())
+  lineItem    LineItem       @relation(fields: [lineItemId], references: [id], onDelete: Cascade)
+  actor       Owner          @relation(fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([lineItemId, createdAt])
+  @@index([actorId, createdAt])
+}
+
+model Reminder {
+  id          String    @id @default(uuid()) @db.Uuid
+  lineItemId  String    @db.Uuid
+  ownerId     String    @db.Uuid
+  renewalDate DateTime  @db.Date
+  dismissedAt DateTime?
+  createdAt   DateTime  @default(now())
+  lineItem    LineItem  @relation(fields: [lineItemId], references: [id], onDelete: Cascade)
+  owner       Owner     @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  notifications Notification[]
+
+  @@unique([lineItemId, renewalDate])
+  @@index([ownerId, dismissedAt, createdAt])
+  @@index([renewalDate])
+}
+
+model Notification {
+  id          String           @id @default(uuid()) @db.Uuid
+  ownerId     String           @db.Uuid
+  reminderId  String?          @db.Uuid
+  type        NotificationType
+  readAt      DateTime?
+  createdAt   DateTime         @default(now())
+  owner       Owner            @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  reminder    Reminder?        @relation(fields: [reminderId], references: [id], onDelete: Cascade)
+
+  @@index([ownerId, readAt, createdAt])
+  @@index([reminderId])
+}
+
+model QueryAudit {
+  id             String   @id @default(uuid()) @db.Uuid
+  question       String
+  resolvedIntent Json
+  generatedSql   String?
+  parameters     Json?
+  resultCount    Int      @default(0)
+  resultIds      String[] @default([])
+  durationMs     Int?
+  model          String?
+  requestId      String?
+  createdAt      DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([requestId])
+}
+
+model AssistantConversation {
+  id        String              @id @default(uuid()) @db.Uuid
+  ownerId   String              @db.Uuid
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+  owner     Owner               @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  messages  AssistantMessage[]
+
+  @@index([ownerId, updatedAt])
+}
+
+model AssistantMessage {
+  id             String                @id @default(uuid()) @db.Uuid
+  conversationId String                @db.Uuid
+  role           String
+  content        String
+  resolvedFilters Json?
+  createdAt      DateTime              @default(now())
+  conversation   AssistantConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+}

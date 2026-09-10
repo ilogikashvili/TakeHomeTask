@@ -1,0 +1,50 @@
+name: Verify
+on: [push, pull_request]
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: test-only-password
+          POSTGRES_DB: app
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      DATABASE_URL: postgresql://postgres:test-only-password@localhost:5432/app
+      READONLY_DATABASE_URL: postgresql://postgres:test-only-password@localhost:5432/app
+      TEST_DATABASE_ADMIN_URL: postgresql://postgres:test-only-password@localhost:5432/postgres
+      AUTH_JWT_SECRET: ci-only-secret-at-least-32-characters
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - run: npm audit --audit-level=high
+      - run: npx prisma validate
+      - run: npx prisma migrate deploy
+      - run: npx prisma migrate status
+      - run: npm run prisma:generate
+      - run: npm test -- --runInBand
+      - run: npm run test:e2e
+      - run: npm run lint
+      - run: npm run build
+      - run: npm ci
+        working-directory: frontend
+      - run: npm audit --audit-level=high
+        working-directory: frontend
+      - run: npm run build
+        working-directory: frontend
+      - run: npx playwright install --with-deps chromium
+        working-directory: frontend
+      - run: npm test
+        working-directory: frontend
