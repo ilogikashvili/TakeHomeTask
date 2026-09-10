@@ -1,5 +1,6 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import type { Prisma } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { AppModule } from '../../src/app.module';
 import { AuthService } from '../../src/auth/auth.service';
@@ -52,7 +53,7 @@ describe('assistant task acceptance', () => {
           category,
           name: fixture.name,
           amount: fixture.amount,
-          billingPeriod: fixture.billingPeriod as any,
+          billingPeriod: fixture.billingPeriod as Prisma.LineItemCreateInput['billingPeriod'],
           startDate: new Date('2025-01-01'),
           endDate: new Date('2025-12-31'),
           renewalDate: new Date('2025-02-01'),
@@ -140,7 +141,7 @@ describe('assistant task acceptance', () => {
   });
 
   it('requires clarification when multiple vendor candidates are plausible', async () => {
-    const created = await prisma.vendor.createMany({ data: [
+    await prisma.vendor.createMany({ data: [
       { name: 'Microsoft', normalizedName: 'microsoft', category: 'software' },
       { name: 'Microsoft Azure', normalizedName: 'microsoftazure', category: 'software' },
       { name: 'Microsoft 365', normalizedName: 'microsoft365', category: 'software' },

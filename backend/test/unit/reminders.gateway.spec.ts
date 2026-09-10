@@ -66,11 +66,12 @@ describe('RemindersGateway authorization', () => {
 
 	it('broadcasts dismissal to the owner room so other tabs sync', () => {
 		const emit = jest.fn();
-		(gateway as any).server = { to: jest.fn().mockReturnValue({ emit }) };
+		const server = { to: jest.fn().mockReturnValue({ emit }) };
+		(gateway as unknown as { server: typeof server }).server = server;
 
 		gateway.notifyDismissed('owner-1', 'notification-1');
 
-		expect((gateway as any).server.to).toHaveBeenCalledWith('owner:owner-1');
+		expect((gateway as unknown as { server: typeof server }).server.to).toHaveBeenCalledWith('owner:owner-1');
 		expect(emit).toHaveBeenCalledWith('reminder.dismissed', { notificationId: 'notification-1' });
 	});
 });
