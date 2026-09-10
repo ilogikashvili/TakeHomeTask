@@ -48,12 +48,18 @@ export class AssistantService {
       return { status: 'clarification_required', question: 'Do you mean contracts renewing in that period, or annualized recurring spend? Historical payments are not recorded in this ledger.' };
     }
     const query = Object.assign(new LedgerQueryDto(), renewalWindow(parsed));
-    if (parsed.intent === 'renewal_summary') query.status = LedgerStatus.ACTIVE;
+    if (parsed.intent === 'renewal_summary') {
+      query.status = LedgerStatus.ACTIVE;
+    } else if (!query.status && (parsed.category || parsed.vendorText || parsed.annualize || parsed.amountMin !== undefined || parsed.amountMax !== undefined || parsed.period)) {
+      query.status = LedgerStatus.ACTIVE;
+    }
     if (user?.role === 'owner') {
       if (!user.ownerId) throw new BadRequestException('Owner identity is missing from access token');
       query.ownerId = user.ownerId;
     }
     if (parsed.category) query.category = parsed.category;
+    if (parsed.amountMin !== undefined) query.minAmount = parsed.amountMin;
+    if (parsed.amountMax !== undefined) query.maxAmount = parsed.amountMax;
     if (parsed.vendorText) {
       const vendors = await this.prisma.vendor.findMany({
         where: { lineItems: { some: { deletedAt: null, ...(query.ownerId ? { ownerId: query.ownerId } : {}) } } },

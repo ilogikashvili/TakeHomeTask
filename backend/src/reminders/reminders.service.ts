@@ -14,7 +14,10 @@ export class RemindersService {
 	}
 
 	dismiss(notificationId: string, ownerId: string) {
-		return this.repository.dismiss(notificationId, ownerId);
+		return this.repository.dismiss(notificationId, ownerId).then((result) => {
+			if (result.count > 0) this.gateway.notifyDismissed(ownerId, notificationId);
+			return result;
+		});
 	}
 
 	sweep(windowStart: Date, windowEnd: Date) {

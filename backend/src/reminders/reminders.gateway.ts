@@ -67,6 +67,10 @@ export class RemindersGateway implements OnGatewayConnection, OnGatewayDisconnec
 		this.server?.to(`owner:${ownerId}`).emit('reminder.created', { reminderId });
 	}
 
+	notifyDismissed(ownerId: string, notificationId: string): void {
+		this.server?.to(`owner:${ownerId}`).emit('reminder.dismissed', { notificationId });
+	}
+
 	private bearerToken(authorization?: string): string | undefined {
 		return authorization?.startsWith('Bearer ') ? authorization.slice('Bearer '.length) : undefined;
 	}

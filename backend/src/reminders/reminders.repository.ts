@@ -43,16 +43,25 @@ export class RemindersRepository {
 
 	findUnread(ownerId: string) {
 		return this.prisma.notification.findMany({
-			where: { ownerId, readAt: null, reminder: { lineItem: { deletedAt: null } } },
+			where: { ownerId, readAt: null, reminder: { dismissedAt: null, lineItem: { deletedAt: null } } },
 			orderBy: { createdAt: 'desc' },
 			include: { reminder: { include: { lineItem: { select: { name: true } } } } },
 		});
 	}
 
 	dismiss(notificationId: string, ownerId: string) {
-		return this.prisma.notification.updateMany({
-			where: { id: notificationId, ownerId, readAt: null },
-			data: { readAt: new Date() },
+		return this.prisma.$transaction(async (tx) => {
+			const result = await tx.notification.updateMany({
+				where: { id: notificationId, ownerId, readAt: null },
+				data: { readAt: new Date() },
+			});
+			if (result.count > 0) {
+				await tx.reminder.updateMany({
+					where: { notifications: { some: { id: notificationId, ownerId } } },
+					data: { dismissedAt: new Date() },
+				});
+			}
+			return result;
 		});
 	}
 }

@@ -34,6 +34,41 @@ describe('database consistency and shared quotas', () => {
     } finally { await prisma.lineItem.delete({ where: { id: item.id } }); }
   });
 
+  it('computes annualized recurring spend with the locked billing-period contract', async () => {
+    const source = await prisma.lineItem.findFirstOrThrow();
+    const category = 'contract-proof-recurring';
+    const query = Object.assign(new LedgerQueryDto(), { ownerId: source.ownerId, category, status: 'ACTIVE' });
+    const itemIds: string[] = [];
+    try {
+      const fixtures = [
+        { amount: '100', billingPeriod: 'MONTHLY', name: 'monthly' },
+        { amount: '100', billingPeriod: 'QUARTERLY', name: 'quarterly' },
+        { amount: '100', billingPeriod: 'ANNUAL', name: 'annual' },
+        { amount: '100', billingPeriod: 'WEEKLY', name: 'weekly' },
+      ] as const;
+      for (const fixture of fixtures) {
+        const created = await prisma.lineItem.create({ data: {
+          ownerId: source.ownerId,
+          vendorId: source.vendorId,
+          category,
+          name: fixture.name,
+          amount: fixture.amount,
+          billingPeriod: fixture.billingPeriod,
+          startDate: new Date('2025-01-01'),
+          endDate: new Date('2025-12-31'),
+          renewalDate: new Date('2025-02-01'),
+          status: 'ACTIVE',
+        } });
+        itemIds.push(created.id);
+      }
+      const aggregates = await app.get(LineItemsRepository).findAggregates(query);
+      expect(aggregates.annualizedAmount).toBe('6900.00');
+      expect(aggregates.totalAmount).toBe('400.00');
+    } finally {
+      await prisma.lineItem.deleteMany({ where: { id: { in: itemIds } } });
+    }
+  });
+
   it('enforces a shared limit under simultaneous requests', async () => {
     const identity = 'quota-test-' + randomUUID();
     try {
