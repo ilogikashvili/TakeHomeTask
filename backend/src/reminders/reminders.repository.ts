@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 
 export interface InsertedReminder {
@@ -10,7 +10,7 @@ export interface InsertedReminder {
 
 @Injectable()
 export class RemindersRepository {
-	constructor(private readonly prisma: PrismaService) {}
+	constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
 	async sweep(windowStart: Date, windowEnd: Date): Promise<InsertedReminder[]> {
 		return this.prisma.$transaction(async (transaction) => {

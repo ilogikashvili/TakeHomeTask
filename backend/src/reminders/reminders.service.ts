@@ -1,12 +1,12 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { RemindersGateway } from './reminders.gateway';
 import { RemindersRepository } from './reminders.repository';
 
 @Injectable()
 export class RemindersService {
 	constructor(
-		private readonly repository: RemindersRepository,
-		private readonly gateway: RemindersGateway,
+		@Inject(RemindersRepository) private readonly repository: RemindersRepository,
+		@Inject(RemindersGateway) private readonly gateway: RemindersGateway,
 	) {}
 
 	unread(ownerId: string) {

@@ -1,4 +1,4 @@
-import { Injectable, Optional, ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
+import { Inject, Injectable, Optional, ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import { AuthUser } from './auth.types';
@@ -14,7 +14,7 @@ export class AuthService {
   private readonly active: string;
   private readonly issuer: string;
   private readonly audience: string;
-  constructor(config: ConfigService, @Optional() private readonly prisma?: PrismaService) {
+  constructor(@Inject(ConfigService) config: ConfigService, @Optional() private readonly prisma?: PrismaService) {
     this.active = config.get<string>('AUTH_JWT_ACTIVE_KEY') ?? 'current';
     this.keys = JSON.parse(config.get<string>('AUTH_JWT_KEYS') ?? JSON.stringify({ [this.active]: config.get<string>('AUTH_JWT_SECRET') ?? 'development-only-change-me-32-characters' }));
     this.issuer = config.get<string>('AUTH_JWT_ISSUER') ?? 'ledger-local';

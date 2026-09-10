@@ -1,10 +1,10 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { RemindersService } from './reminders.service';
 
 @Injectable()
 export class ReminderScannerService {
-	constructor(private readonly reminders: RemindersService) {}
+	constructor(@Inject(RemindersService) private readonly reminders: RemindersService) {}
 
 	async onApplicationBootstrap(): Promise<void> {
 		await this.scan();

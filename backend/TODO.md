@@ -1,6 +1,6 @@
 # Implementation checklist
 
-Updated 2026-09-10 after code review, isolated PostgreSQL tests, frontend build and browser smoke testing.
+Updated 2026-09-10 after authorization testing, live Gemini adapter verification and compiled-bootstrap checks.
 
 Current assessment: a working full-stack demonstration with substantive correctness coverage. It is **not production-ready**. See [PRODUCTION_READINESS.md](../PRODUCTION_READINESS.md) for release gates and the evidence needed to close them.
 
@@ -19,7 +19,10 @@ Current assessment: a working full-stack demonstration with substantive correctn
 - [x] Assistant validated intent, conservative vendor clarification, candidate selection and UTC renewal windows.
 - [x] Assistant canonical queries on a read-only transaction, database calculations and matching ledger links.
 - [x] Owner-scoped persisted conversations and basic period follow-ups.
-- [x] Optional Gemini adapter with mocked contract/failure tests; live execution remains unverified.
+- [x] Optional Gemini adapter with structured output, Zod validation, timeout/retry and mocked contract/failure tests.
+- [x] Live Gemini adapter smoke test with `gemini-3.6-flash`: valid spend, vendor, renewal and mutation-shaped intents observed; credentials are local-only and must never be committed.
+- [x] Updated Gemini request contract to `responseMimeType`/`responseSchema` and removed unsupported `additionalProperties`.
+- [x] Fixed compiled NestJS configuration and reminder dependency injection wiring discovered during live bootstrap verification.
 - [x] Authenticated SSE progress/result responses and authorized CSV export.
 - [x] Structured request logging and JWT header/expiry checks.
 - [x] Development-only, explicit opt-in demo login with 15-minute tokens.
@@ -31,7 +34,7 @@ Current assessment: a working full-stack demonstration with substantive correctn
 - [x] CI workflow written for backend validation/tests/build and frontend build/browser tests. Remote CI has not run.
 - [x] Docker entrypoint corrected to actual build output, non-root runtime selected and secrets excluded from build context. Docker execution has not been verified.
 
-Local verification: **61 unit tests, 54 PostgreSQL E2E tests, 4 browser tests**, Prisma validation/generation, migration deployment/status, backend/frontend builds, backend lint and high-severity dependency audits pass.
+Local verification: **61 unit tests, 54 PostgreSQL E2E tests, 4 browser tests**, Prisma validation/generation, migration deployment/status, backend/frontend builds, backend lint and high-severity dependency audits pass. Live Gemini adapter smoke tests pass; full compiled `/assistant/ask` verification is still being rerun after bootstrap wiring fixes.
 
 ## P0 — Required before serving real customer data
 
@@ -51,7 +54,7 @@ Local verification: **61 unit tests, 54 PostgreSQL E2E tests, 4 browser tests**,
 
 - [ ] Explicit response DTOs and detailed Swagger schemas for all routes.
 - [ ] Finish amount upper-bound validation, consistent conflict semantics and complete audit coverage of individual mutations.
-- [ ] Verify Gemini live with configured credentials/model; test outages, quota failures, invalid output and ambiguous questions on a representative question set.
+- [ ] Verify the complete Gemini-backed `/assistant/ask` path with configured credentials/model; direct adapter smoke tests pass, while compiled HTTP verification and the full representative evaluation set remain open.
 - [ ] Replace string-based follow-up concatenation with structured bounded conversation state.
 - [ ] Broaden browser tests to admin bulk operations, edit conflicts, candidate selection, live reminder arrival/dismissal, expired sessions, accessibility and supported browsers.
 - [ ] Review data retention, conversation/audit access and provider-data handling.
@@ -95,7 +98,7 @@ Status meanings: **Done** has repository or local test evidence; **Partial** has
 - [ ] 15. SQL injection: **Done locally**. Prisma filters are parameterized and read-only SQL enforcement tests exist; a documented raw-query inventory is still useful.
 - [ ] 16. CSV security: **Partial**. Formula-prefix escaping, quoting and authorized export are implemented; the full spreadsheet/newline/encoding/content-disposition matrix remains open.
 - [ ] 17. Assistant security: **Partial**. Mutation rejection, authorized canonical queries, candidate validation and provider failure handling exist; adversarial isolation, prompt-injection and malformed-model-output coverage remains open.
-- [ ] 18. Gemini adapter: **Partial**. Structured output, Zod validation, timeout/retry and mocked failures exist; live provider execution is explicitly unverified.
+- [ ] 18. Gemini adapter: **Partial**. Direct live calls now pass with `gemini-3.6-flash`, and the current structured-output API contract is implemented; the compiled HTTP path, 15-30 question evaluation set, provider quota/outage cases and data-retention decision remain open.
 - [ ] 19. AI cost controls: **Partial**. Token limits, timeout and configured per-user/global assistant limits exist; enforced quotas, cost telemetry and provider-abuse tests remain open.
 - [ ] 20. Prompt/version management: **Partial**. Bounded structured follow-ups and the explicit `intent-schema-v1` contract are implemented and tested; provider evaluation/version rollout procedure remains open.
 - [ ] 21. Structured logging: **Partial**. Request ID, route, status, duration and configurable log level are implemented without sensitive request data; centralized retention, release/user correlation and production verification remain open.
@@ -127,4 +130,4 @@ Status meanings: **Done** has repository or local test evidence; **Partial** has
 
 ### Current active item
 
-**Item 22: Error tracking and operational monitoring.** Application metrics and sanitized structured logging exist. The next step requires selecting and configuring an external error-monitoring/alerting owner; no provider or production observability environment is configured in this workspace.
+**Item 18: Gemini live integration and evaluation.** Direct provider calls pass with the local model configuration. The next step is a clean compiled `/assistant/ask` verification, then a representative safe/ambiguous/follow-up/adversarial question set; no key or provider credential belongs in Git or chat.

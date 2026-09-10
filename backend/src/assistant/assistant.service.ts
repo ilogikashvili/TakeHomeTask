@@ -35,11 +35,13 @@ export class AssistantService {
     const followup = /^(and |what about |how about )/i.test(question.trim());
     const continuation = followup ? resolveFollowup(question, previous) : undefined;
     if (followup && !continuation) return { status: 'clarification_required', question: 'Please ask a complete question, or specify a renewal period such as next month.' };
-    let parsed;
+    const safeLocalIntent = continuation ?? parseIntent(question);
+    let parsed: ParsedIntent;
     try {
-      parsed = continuation ?? intentSchema.parse(this.gemini.enabled ? await this.gemini.interpret(question) : parseIntent(question));
+      parsed = continuation ?? (this.gemini.enabled ? await this.gemini.interpret(question) : safeLocalIntent);
+      if (parsed.intent === 'unsupported') parsed = safeLocalIntent;
     } catch {
-      return { status: 'unavailable', answer: 'I could not safely interpret the question. Please retry or use the ledger filters.' };
+      parsed = safeLocalIntent;
     }
     if (parsed.intent === 'unsupported') return { status: 'refused', answer: 'I support subscription spend totals, vendor/category totals, and renewal summaries.' };
     if (parsed.intent !== 'renewal_summary' && (parsed.period || parsed.year)) {
