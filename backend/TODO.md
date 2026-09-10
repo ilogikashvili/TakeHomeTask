@@ -31,7 +31,7 @@ Current assessment: a working full-stack demonstration with substantive correctn
 - [x] CI workflow written for backend validation/tests/build and frontend build/browser tests. Remote CI has not run.
 - [x] Docker entrypoint corrected to actual build output, non-root runtime selected and secrets excluded from build context. Docker execution has not been verified.
 
-Local verification: **61 unit tests, 49 PostgreSQL E2E tests, 4 browser tests**, Prisma validation/generation, migration deployment/status, backend/frontend builds, backend lint and high-severity dependency audits pass.
+Local verification: **61 unit tests, 54 PostgreSQL E2E tests, 4 browser tests**, Prisma validation/generation, migration deployment/status, backend/frontend builds, backend lint and high-severity dependency audits pass.
 
 ## P0 — Required before serving real customer data
 
@@ -78,7 +78,7 @@ Status meanings: **Done** has repository or local test evidence; **Partial** has
 - [ ] 1. CI/CD: **Partial**. Workflow includes Prisma validation/generation, unit tests, PostgreSQL E2E, lint, builds and browser tests; local audit passes. Remote GitHub Actions execution and branch protection are unverified because this checkout has no Git metadata or configured remote.
 - [ ] 2. Production configuration: **Partial**. Startup validation, production secret rejection, CORS, rate and retention settings exist; production values, secret storage, documented variable inventory and deployment verification remain open.
 - [ ] 3. Authentication strategy: **Partial**. HS256 verification, issuer/audience configuration, key map support and demo-route restrictions exist; production identity integration, refresh/revocation lifecycle and rotation procedure remain open.
-- [ ] 4. Authorization and IDOR audit: **Partial**. Owner scoping, conversation isolation, approval authorization and bulk protections are covered locally; the complete endpoint matrix, admin actor attribution and dedicated adversarial security suite remain open.
+- [ ] 4. Authorization and IDOR audit: **Partial**. `docs/AUTHORIZATION-MATRIX.md` and focused HTTP tests now cover owner/admin/anonymous scope, IDOR, exports, reminders, expiry, revocation and forged actors; full route/credential coverage and adversarial suite organization remain open.
 - [ ] 5. Database hardening: **Partial**. Separate read-only execution and SQL privilege tests exist; production PostgreSQL version/TLS, dedicated roles, pool/query limits and automated denial checks for every DDL/write privilege remain to be verified in deployment.
 - [ ] 6. Backup and recovery: **Partial**. The isolated restore drill now passes for all 12 public tables with matching row counts/content digests; production scheduling, encrypted off-server storage, retention and agreed RPO/RTO remain operational work.
 - [ ] 7. Prisma migration discipline: **Partial**. Migrations use `migrate deploy`, CI now checks deployment/status, E2E uses a separate database, and compatibility/rollback rehearsal remains open.

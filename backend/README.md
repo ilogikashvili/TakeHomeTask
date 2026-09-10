@@ -4,7 +4,7 @@ NestJS 11, Prisma 6 and PostgreSQL. The ledger and assistant use the same parame
 
 The current checklist is [TODO.md](TODO.md). A working [React frontend](../frontend/README.md) is now included. Remaining release gates are recorded in [PRODUCTION_READINESS.md](../PRODUCTION_READINESS.md); local tests do not establish production readiness.
 
-Operational references: [architecture](../ARCHITECTURE.md), [security](../SECURITY.md), [deployment](../DEPLOYMENT.md), [disaster recovery](../DISASTER_RECOVERY.md), and the [release runbook](../deploy/RUNBOOK.md).
+Operational references: [architecture](../ARCHITECTURE.md), [security](../SECURITY.md), [authorization matrix](../docs/AUTHORIZATION-MATRIX.md), [deployment](../DEPLOYMENT.md), [disaster recovery](../DISASTER_RECOVERY.md), [remaining work](../REMAINING_WORK.md), and the [release runbook](../deploy/RUNBOOK.md).
 
 ## Run locally
 
@@ -125,4 +125,4 @@ The expanded suites cover all ledger sort directions, page totals, filtered grou
 
 E2E tests run serially against a dedicated `*_e2e` database, apply migrations, seed it, and create/clean up mutation fixtures. Fixed response-count assertions have been replaced with database expectations. Create the separate database once with the application role as owner, or provide `TEST_DATABASE_ADMIN_URL` for first-run creation. The test runner refuses to seed the configured application database, even if an alternate username is supplied.
 
-The repository includes [`.github/workflows/ci.yml`](../.github/workflows/ci.yml), covering Prisma validation/generation, migration deployment/status, unit tests, isolated PostgreSQL E2E tests, backend lint/build, and frontend build/browser tests. The workflow is written but has not run remotely. Local checks pass: 61 unit tests, 49 PostgreSQL E2E tests, 4 browser tests, both builds, backend lint and high-severity dependency audits.
+The repository includes [`.github/workflows/ci.yml`](../.github/workflows/ci.yml), covering Prisma validation/generation, migration deployment/status, unit tests, isolated PostgreSQL E2E tests, backend lint/build, and frontend build/browser tests. The workflow is written but has not run remotely. Local checks pass: 61 unit tests, 54 PostgreSQL E2E tests, 4 browser tests, both builds, backend lint and high-severity dependency audits.
