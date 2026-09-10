@@ -10,7 +10,13 @@ export function RemindersView({ token, user, owners }: { token: string; user: Id
     setLoading(true); load();
     const socket = io({ auth: { token } });
     socket.on('connect', () => { setConnected(true); socket.emit('owner.join', { ownerId }); load(); });
-    socket.on('disconnect', () => setConnected(false)); socket.on('connect_error', () => setConnected(false)); socket.on('reminder.created', load);
+    socket.on('disconnect', () => setConnected(false));
+    socket.on('connect_error', () => setConnected(false));
+    socket.on('reminder.created', load);
+    socket.on('reminder.dismissed', (event: { notificationId?: string }) => {
+      if (!event?.notificationId) return;
+      setItems(current => current.filter(item => item.id !== event.notificationId));
+    });
     const refresh = setInterval(load, 30000);
     return () => { alive = false; clearInterval(refresh); socket.disconnect(); };
   }, [ownerId, token]);

@@ -77,6 +77,65 @@ describe('reminders idempotency', () => {
     }
   });
 
+  it('recovers missed reminder state on reconnect from unread persistence', async () => {
+    const source = await prisma.lineItem.findFirstOrThrow({ where: { status: 'ACTIVE' } });
+    const date = new Date('2065-01-02T00:00:00.000Z');
+    const item = await prisma.lineItem.create({ data: {
+      vendorId: source.vendorId, ownerId: source.ownerId, name: 'Reconnect fixture', category: 'test',
+      amount: 1, billingPeriod: 'ANNUAL', startDate: new Date('2064-01-01'), endDate: new Date('2066-01-01'), renewalDate: date,
+      status: 'ACTIVE',
+    } });
+
+    try {
+      const inserted = await reminders.sweep(date, date);
+      const notification = await prisma.notification.findFirstOrThrow({
+        where: { reminderId: inserted[0].id },
+      });
+
+      expect((await app.get(RemindersRepository).findUnread(source.ownerId)).some(row => row.id === notification.id)).toBe(true);
+
+      await reminders.dismiss(notification.id, source.ownerId);
+      expect((await app.get(RemindersRepository).findUnread(source.ownerId)).some(row => row.id === notification.id)).toBe(false);
+    } finally {
+      await prisma.notification.deleteMany({ where: { reminder: { lineItemId: item.id } } });
+      await prisma.reminder.deleteMany({ where: { lineItemId: item.id } });
+      await prisma.lineItem.delete({ where: { id: item.id } });
+    }
+  });
+
+  it('keeps a dismissed reminder dismissed after owner reassignment and recreates only on a new renewal date', async () => {
+    const source = await prisma.lineItem.findFirstOrThrow({ where: { status: 'ACTIVE' } });
+    const nextOwner = await prisma.owner.findFirstOrThrow({ where: { id: { not: source.ownerId } } });
+    const firstDate = new Date('2066-01-02T00:00:00.000Z');
+    const secondDate = new Date('2066-02-02T00:00:00.000Z');
+    const item = await prisma.lineItem.create({ data: {
+      vendorId: source.vendorId, ownerId: source.ownerId, name: 'Lifecycle fixture', category: 'test',
+      amount: 1, billingPeriod: 'MONTHLY', startDate: new Date('2065-01-01'), endDate: new Date('2067-01-01'), renewalDate: firstDate, status: 'ACTIVE',
+    } });
+
+    try {
+      const firstReminder = await reminders.sweep(firstDate, firstDate);
+      const firstNotification = await prisma.notification.findFirstOrThrow({ where: { reminderId: firstReminder[0].id } });
+      await reminders.dismiss(firstNotification.id, source.ownerId);
+
+      const repo = app.get(LineItemsRepository);
+      await repo.updateWithApproval(item.id, { expectedVersion: 1, actorId: source.ownerId, ownerId: nextOwner.id });
+
+      const reminder = await prisma.reminder.findUniqueOrThrow({ where: { id: firstReminder[0].id } });
+      expect(reminder.dismissedAt).not.toBeNull();
+      expect((await app.get(RemindersRepository).findUnread(nextOwner.id)).some(notification => notification.reminder?.lineItemId === item.id)).toBe(false);
+
+      await prisma.lineItem.update({ where: { id: item.id }, data: { renewalDate: secondDate } });
+      await reminders.sweep(secondDate, secondDate);
+      const remaining = await prisma.reminder.findMany({ where: { lineItemId: item.id } });
+      expect(remaining.some((row) => row.renewalDate.getTime() === secondDate.getTime())).toBe(true);
+    } finally {
+      await prisma.notification.deleteMany({ where: { reminder: { lineItemId: item.id } } });
+      await prisma.reminder.deleteMany({ where: { lineItemId: item.id } });
+      await prisma.lineItem.delete({ where: { id: item.id } });
+    }
+  });
+
   it.each(['reassign', 'delete'])('serializes a scanner with %s and leaves no wrongly scoped unread records', async action => {
     const source = await prisma.lineItem.findFirstOrThrow({ where: { status: 'ACTIVE' } });
     const nextOwner = await prisma.owner.findFirstOrThrow({ where: { id: { not: source.ownerId } } });

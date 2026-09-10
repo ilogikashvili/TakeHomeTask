@@ -8,6 +8,19 @@ const billingPeriods: BillingPeriod[] = [
   BillingPeriod.ANNUAL,
 ];
 
+const statusPattern: LineItemStatus[] = [
+  LineItemStatus.ACTIVE,
+  LineItemStatus.ACTIVE,
+  LineItemStatus.ACTIVE,
+  LineItemStatus.ACTIVE,
+  LineItemStatus.PENDING_APPROVAL,
+  LineItemStatus.DRAFT,
+  LineItemStatus.ACTIVE,
+  LineItemStatus.ACTIVE,
+  LineItemStatus.TERMINATED,
+  LineItemStatus.ACTIVE,
+];
+
 export async function seedLineItems(prisma: PrismaClient): Promise<void> {
   const [vendors, owners] = await Promise.all([
     prisma.vendor.findMany({ select: { id: true, category: true } }),
@@ -18,22 +31,22 @@ export async function seedLineItems(prisma: PrismaClient): Promise<void> {
     throw new Error('Seed prerequisites are missing: expected 200 vendors and 30 owners');
   }
 
+  const baseDate = new Date();
   const lineItems = Array.from({ length: 2500 }, (_, index) => {
     const vendor = vendors[index % vendors.length];
     const owner = owners[(index * 7) % owners.length];
-    const startDate = faker.date.between({ from: '2022-01-01', to: '2025-12-31' });
+    const categoryOffset = ['software', 'infrastructure', 'professional-services', 'operations', 'marketing'].indexOf(vendor.category);
+    const startDate = faker.date.between({ from: new Date('2022-01-01'), to: new Date(baseDate.getTime() - 30 * 86400000) });
     const endDate = new Date(startDate);
-    endDate.setUTCDate(endDate.getUTCDate() + 1 + 365 + (index % 730));
-    const status = index % 10 === 0
-      ? LineItemStatus.TERMINATED
-      : index % 7 === 0
-        ? LineItemStatus.PENDING_APPROVAL
-        : index % 5 === 0
-          ? LineItemStatus.DRAFT
-          : LineItemStatus.ACTIVE;
-    const renewalDate = status === LineItemStatus.TERMINATED || index % 13 === 0
+    endDate.setUTCDate(endDate.getUTCDate() + 365 + (index % 730));
+    const status = statusPattern[(index + categoryOffset) % statusPattern.length];
+    const renewalDate = status === LineItemStatus.TERMINATED || (index + categoryOffset) % 17 === 0
       ? null
-      : faker.date.between({ from: startDate, to: endDate });
+      : (() => {
+          const nextRenewal = new Date(startDate);
+          nextRenewal.setUTCDate(nextRenewal.getUTCDate() + 30 + ((index * 13 + categoryOffset * 7) % 540));
+          return nextRenewal;
+        })();
 
     return {
       vendorId: vendor.id,
@@ -52,17 +65,29 @@ export async function seedLineItems(prisma: PrismaClient): Promise<void> {
 
   await prisma.lineItem.createMany({ data: lineItems });
 
-  const activeLineItems = await prisma.lineItem.findMany({
-    where: { status: LineItemStatus.ACTIVE },
-    select: { id: true, ownerId: true },
+  const persisted = await prisma.lineItem.findMany({
+    where: { ownerId: { in: owners.map((owner) => owner.id) } },
+    select: { id: true, ownerId: true, status: true },
   });
-  await prisma.approvalEvent.createMany({
-    data: activeLineItems.map((lineItem) => ({
+
+  const approvalEvents = persisted.flatMap((lineItem, index) => {
+    const count = lineItem.status === LineItemStatus.ACTIVE
+      ? 1 + (index % 5)
+      : lineItem.status === LineItemStatus.PENDING_APPROVAL
+        ? (index % 3)
+        : lineItem.status === LineItemStatus.DRAFT
+          ? (index % 2)
+          : 0;
+    return Array.from({ length: count }, (_, approvalIndex) => ({
       lineItemId: lineItem.id,
       actorId: lineItem.ownerId,
-      action: ApprovalAction.APPROVED,
-      toStatus: LineItemStatus.ACTIVE,
-      note: 'Deterministic seed approval',
-    })),
+      action: [ApprovalAction.CREATED, ApprovalAction.APPROVED, ApprovalAction.STATUS_CHANGED, ApprovalAction.UPDATED][(index + approvalIndex) % 4],
+      toStatus: lineItem.status,
+      note: `Deterministic approval ${approvalIndex + 1}`,
+    }));
   });
+
+  if (approvalEvents.length > 0) {
+    await prisma.approvalEvent.createMany({ data: approvalEvents });
+  }
 }

@@ -104,6 +104,8 @@ The Gemini adapter follows [Google's structured-output REST documentation](https
 
 Read-only execution explicitly opens a read-only PostgreSQL transaction with a five-second statement timeout. Configure a separate login with SELECT-only privileges using [create-readonly-role.sql](scripts/create-readonly-role.sql); set its password separately and supply its URL. The assistant fails closed when the read-only URL is missing.
 
+Retention is intentionally limited to operational data. The scheduled prune job removes stale `QueryAudit` rows and stale `AssistantConversation` records older than the configured retention window, but it never deletes live financial records, approval history, or reminder/notification state. The retention policy is an operational cleanup policy, not a business-data purge.
+
 SSE uses bearer authentication in the request header, not a token in the URL. It emits an initial progress event followed by a result or sanitized error. This is coarse progress streaming, not model token streaming.
 
 ## Reminders and operations

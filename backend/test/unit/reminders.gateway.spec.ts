@@ -55,12 +55,23 @@ describe('RemindersGateway authorization', () => {
 		await jest.advanceTimersByTimeAsync(1001);
 		expect(socket.disconnect).toHaveBeenCalledWith(true);
 	});
-	 it('disconnects an active socket when the next revocation check fails', async () => {
+	it('disconnects an active socket when the next revocation check fails', async () => {
 		jest.useFakeTimers();
 		const socket = client(auth.sign({ sub: 'user', role: 'admin' }));
 		await gateway.handleConnection(socket);
 		jest.mocked(auth.authenticate).mockRejectedValueOnce(new Error('Session revoked'));
 		await jest.advanceTimersByTimeAsync(15000);
 		expect(socket.disconnect).toHaveBeenCalledWith(true);
+	});
+
+	it('broadcasts dismissal to the owner room so other tabs sync', () => {
+		const emit = jest.fn();
+		const server = { to: jest.fn().mockReturnValue({ emit }) };
+		(gateway as unknown as { server: typeof server }).server = server;
+
+		gateway.notifyDismissed('owner-1', 'notification-1');
+
+		expect((gateway as unknown as { server: typeof server }).server.to).toHaveBeenCalledWith('owner:owner-1');
+		expect(emit).toHaveBeenCalledWith('reminder.dismissed', { notificationId: 'notification-1' });
 	});
 });
