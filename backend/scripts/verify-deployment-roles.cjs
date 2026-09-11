@@ -34,6 +34,7 @@ async function main() {
     created = true;
     url.pathname = '/' + db;
     env.DATABASE_URL = url.href;
+    env.MIGRATION_DATABASE_URL = url.href;
     env.ROLE_TEST_OWNER_URL = url.href;
     env.ROLE_TEST_PG_OWNER_URL = pgMigrationUrl(url.href);
     env.PGHOST = url.hostname;
@@ -64,6 +65,7 @@ async function main() {
     const readonly = new URL(url);
     readonly.username = 'ledger_readonly'; readonly.password = env.LEDGER_READONLY_PASSWORD;
     env.DATABASE_URL = runtime.href;
+    env.MIGRATION_DATABASE_URL = url.href;
     env.READONLY_DATABASE_URL = pgMigrationUrl(readonly.href);
     env.ROLE_TEST_PG_RUNTIME_URL = pgMigrationUrl(runtime.href);
     if (env.ROLE_TEST_TLS === 'true') {

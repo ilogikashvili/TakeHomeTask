@@ -1,5 +1,6 @@
 export type Identity = { sub: string; ownerId?: string; role: 'owner' | 'admin' };
 export type Lookup = { id: string; name: string; category?: string };
+export type Notification = { id: string; createdAt: string; reminder: { renewalDate: string; lineItemId: string; lineItem?: { name: string } } | null };
 export type Row = { id: string; reference: string; version: number; vendorId: string; vendorName: string; ownerId: string; name: string; category: string; status: string; billingPeriod: string; amount: string; startDate: string; endDate: string; renewalDate: string | null; autoRenew: boolean; description?: string | null };
 export type Group = { totalAmount: string; matchingCount: number; category?: string; vendorId?: string; vendorName?: string };
 export type Ledger = { items: Row[]; nextCursor: string | null; aggregates: { totalAmount: string; annualizedAmount: string; matchingCount: number; byVendor: Group[]; byCategory: Group[] } };

@@ -84,10 +84,18 @@ export function normalizeEntity(value: string): string {
 
 export function vendorCandidates(text: string, vendors: Array<{ id: string; name: string }>) {
   const normalized = normalizeEntity(text);
-  const exact = vendors.filter((vendor) => normalizeEntity(vendor.name) === normalized);
+  const uniqueExact = new Map<string, { id: string; name: string }>();
+  for (const vendor of vendors) {
+    const name = normalizeEntity(vendor.name);
+    if (name === normalized && !uniqueExact.has(name)) {
+      uniqueExact.set(name, vendor);
+    }
+  }
+  if (uniqueExact.size > 0) return Array.from(uniqueExact.values());
+
   const prefix = vendors.filter((vendor) => normalizeEntity(vendor.name).startsWith(normalized));
   const partial = vendors.filter((vendor) => normalizeEntity(vendor.name).includes(normalized));
-  const matches = Array.from(new Map([...exact, ...prefix, ...partial].map((vendor) => [vendor.id, vendor])).values());
+  const matches = Array.from(new Map([...prefix, ...partial].map((vendor) => [vendor.id, vendor])).values());
   if (matches.length) return matches;
   // Preserve a reasonable ambiguity boundary for short typos and vendor names that share a meaningful
   // root (for example “micro” / “microsoft”). Leave the final choice to the caller instead of guessing.

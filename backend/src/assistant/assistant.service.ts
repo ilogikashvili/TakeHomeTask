@@ -64,13 +64,13 @@ export class AssistantService {
     if (parsed.amountMin !== undefined) query.minAmount = parsed.amountMin;
     if (parsed.amountMax !== undefined) query.maxAmount = parsed.amountMax;
     if (parsed.vendorText) {
-      const vendors = await this.prisma.vendor.findMany({
+      const scopedVendors = await this.prisma.vendor.findMany({
         where: { lineItems: { some: { deletedAt: null, ...(query.ownerId ? { ownerId: query.ownerId } : {}) } } },
         select: { id: true, name: true },
       });
-      const candidates = vendorCandidates(parsed.vendorText, vendors);
+      const candidates = vendorCandidates(parsed.vendorText, scopedVendors);
       if (selectedVendorId && !candidates.some(candidate => candidate.id === selectedVendorId)) throw new BadRequestException('Select one of the offered vendors');
-      if (!selectedVendorId && (candidates.length !== 1 || normalizeEntity(candidates[0].name) !== normalizeEntity(parsed.vendorText))) {
+      if (!selectedVendorId && candidates.length !== 1) {
         return { status: 'clarification_required', question: candidates.length ? 'Which vendor did you mean? Ask again using the full vendor name.' : 'I could not find that vendor. Please check its name.', candidates: candidates.slice(0, 10) };
       }
       query.vendorId = selectedVendorId ?? candidates[0].id;
