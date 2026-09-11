@@ -5,7 +5,7 @@ import { LedgerQueryDto, LedgerStatus } from '../line-items/dto/ledger-query.dto
 import { QueryAuditRepository } from './audit/query-audit.repository';
 import { AuthUser } from '../auth/auth.types';
 import { GeminiService } from './gemini.service';
-import { intentSchema, normalizeEntity, ParsedIntent, parseIntent, renewalWindow, resolveFollowup, vendorCandidates } from './graph/intent-parser';
+import { intentSchema, ParsedIntent, parseIntent, renewalWindow, resolveFollowup, vendorCandidates } from './graph/intent-parser';
 import { resolveIntentWithGraph } from './graph/runtime-assistant.graph';
 
 export function isMutationRequest(question: string): boolean {
