@@ -168,3 +168,7 @@ This README is the primary reviewer-facing document. Additional project docs rem
 ## Submission readiness
 
 This repository is intended to be reviewed as a complete take-home submission: a runnable application with the required stack, local setup instructions, a public GitHub remote, and a documented verification path.
+
+## Review note
+
+This branch was created specifically to verify that the repository state still produces a clean CI result after the follow-up fixes and documentation updates were merged.
