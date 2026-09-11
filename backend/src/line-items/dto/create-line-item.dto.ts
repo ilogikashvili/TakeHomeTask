@@ -1,5 +1,5 @@
 import { IsCalendarDate, DecimalInput } from '../../common/validation';
-import { IsEnum, IsNumber, IsOptional, IsString, IsUUID, Max, Min, MinLength } from 'class-validator';
+import { IsEnum, IsNumber, IsOptional, IsString, IsUUID, Max, MaxLength, Min, MinLength } from 'class-validator';
 import { BillingPeriod } from '@prisma/client';
 
 export class CreateLineItemDto {
@@ -11,13 +11,16 @@ export class CreateLineItemDto {
 
 	@IsString()
 	@MinLength(1)
+	@MaxLength(200)
 	name!: string;
 
 	@IsString()
 	@MinLength(1)
+	@MaxLength(100)
 	category!: string;
 
 	@IsString()
+	@MaxLength(2000)
 	description!: string;
 
 	@IsEnum(BillingPeriod)

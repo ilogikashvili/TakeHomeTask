@@ -5,6 +5,7 @@ import { AppModule } from '../../src/app.module';
 import { PrismaService } from '../../src/database/prisma.service';
 import { LineItemsRepository } from '../../src/line-items/line-items.repository';
 import { LedgerQueryDto } from '../../src/line-items/dto/ledger-query.dto';
+import { LineItemsService } from '../../src/line-items/line-items.service';
 import { UsageGuard } from '../../src/operations';
 
 describe('database consistency and shared quotas', () => {
@@ -66,6 +67,39 @@ describe('database consistency and shared quotas', () => {
       expect(aggregates.totalAmount).toBe('400.00');
     } finally {
       await prisma.lineItem.deleteMany({ where: { id: { in: itemIds } } });
+    }
+  });
+
+  it('exports one repeatable-read CSV snapshot while a concurrent write commits', async () => {
+    const source = await prisma.lineItem.findFirstOrThrow();
+    const category = 'csv-snapshot-' + randomUUID();
+    const item = await prisma.lineItem.create({ data: { ownerId: source.ownerId, vendorId: source.vendorId, category,
+      name: 'CSV before write', amount: 10, billingPeriod: 'MONTHLY', startDate: source.startDate, endDate: source.endDate } });
+    const service = app.get(LineItemsService);
+    const repository = app.get(LineItemsRepository);
+    const originalFindPage = repository.findPage.bind(repository);
+    let snapshotPageStarted!: () => void;
+    const pageStarted = new Promise<void>(resolve => { snapshotPageStarted = resolve; });
+    let releasePage!: () => void;
+    const release = new Promise<void>(resolve => { releasePage = resolve; });
+    const findPage = jest.spyOn(repository, 'findPage').mockImplementation(async (...args) => {
+      const page = await originalFindPage(...args);
+      snapshotPageStarted();
+      await release;
+      return page;
+    });
+    try {
+      const csvPromise = service.exportCsv(Object.assign(new LedgerQueryDto(), { category }), { sub: source.ownerId, ownerId: source.ownerId, role: 'owner' });
+      await pageStarted;
+      await prisma.lineItem.update({ where: { id: item.id }, data: { amount: 99 } });
+      releasePage();
+      const csv = await csvPromise;
+      expect(csv).toContain('"10.00"');
+      expect(csv).not.toContain('"99.00"');
+      expect((await prisma.lineItem.findUniqueOrThrow({ where: { id: item.id } })).amount.toFixed(2)).toBe('99.00');
+    } finally {
+      findPage.mockRestore();
+      await prisma.lineItem.delete({ where: { id: item.id } });
     }
   });
 

@@ -6,9 +6,15 @@ This is the release control document for the current repository state. It govern
 
 This document is the source of truth for release decisions. [PRODUCTION_READINESS.md](PRODUCTION_READINESS.md) remains the assessment and evidence report, not the release gate.
 
-- 61 backend unit tests passing.
-- 54 PostgreSQL E2E tests passing.
-- 4 frontend Playwright tests passing.
+## Current gate status
+
+- **D1: CLOSED.** Local dependency, build and image-scan evidence is recorded separately.
+- **D2: OPEN / ENVIRONMENT-BLOCKED.** Repository deployment defects were fixed, but Docker Desktop/containerd failed with `read-only file system` during image/build metadata operations. Migration, runtime API, frontend container, recovery and persistence proof were not claimed. Public or cloud deployment was not available.
+- **D3: EVALUATED.** The repository has a strong local code/test baseline, but the remaining Phase A release gates below are not all closed. Remote CI, staging deployment, production operations, capacity and release decisions remain outside the local evidence.
+
+- 62 backend unit tests passing.
+- 68 PostgreSQL E2E tests passing.
+- 6 frontend Playwright tests passing.
 - Backend lint and build passing.
 - Frontend build passing.
 - Prisma validation, generation, migration deployment and migration status passing locally.
@@ -37,7 +43,7 @@ The following activities require a real deployment environment and are intention
 - Production PostgreSQL backup scheduling and restore rehearsal.
 - External error tracking, metrics collection and alerting.
 - Load testing against production-sized infrastructure.
-- Full compiled `/assistant/ask` Gemini verification and representative evaluation set under real provider conditions.
+- Live Gemini provider evaluation and representative evaluation set under real provider conditions; compiled deterministic `/assistant/ask` HTTP coverage is now locally verified.
 
 ## Release priorities
 
@@ -151,11 +157,7 @@ The simplest policy is: if `GEMINI_API_KEY` is absent, the assistant provider fe
 
 ### 4. Concurrency and snapshot consistency
 
-This is one of the most technically interesting remaining backend issues:
-
-> Ledger page and aggregate queries execute separately. CSV traverses multiple queries without a shared snapshot.
-
-That is not necessarily a bug. It becomes a bug only if the API promises a consistent point-in-time result.
+The implementation executes ledger page and aggregate queries inside one `REPEATABLE READ` transaction. CSV pagination also traverses its pages inside one `REPEATABLE READ` transaction, so concurrent committed writes are not mixed into one response or export. This provides snapshot consistency, not serializable conflict detection.
 
 Three valid choices exist:
 
@@ -163,7 +165,7 @@ Three valid choices exist:
 - B. Explicit eventual semantics: document that pagination and aggregates are independently evaluated and may reflect different committed states under concurrent mutation.
 - C. Return a consistency/version marker: more sophisticated and probably unnecessary for this project.
 
-The recommended default is A for the normal ledger response if the implementation cost is reasonable, and a transactionally consistent snapshot for CSV export.
+The verified contract is A: a response or export represents the database snapshot captured when its read transaction begins. Concurrent writes committed afterward are visible to later requests, not to the in-flight response or export.
 
 ### 5. Remote CI and branch protection
 
@@ -180,8 +182,14 @@ The recommended default is A for the normal ledger response if the implementatio
 
 ### 7. Backup, restore and disaster recovery
 
-- Local restore drill passes for the public schema.
+- Local restore drill covers all public tables with matching row counts/content digests when `TEST_DATABASE_ADMIN_URL` is configured; it was not executable in this environment because that admin URL is unset.
 - Production backup schedule, encrypted off-site storage, retention and agreed RPO/RTO remain operational decisions.
+
+## Provider data and retention policy
+
+The deterministic assistant path keeps questions and results inside the application. When Gemini is enabled, the provider request contains the user's question plus bounded intent hints only: vendor text, category, annualization flag, supported period and year. It does not send owner IDs, line-item IDs, database rows, generated SQL, credentials or conversation history. Gemini returns a validated intent; it never supplies executable SQL or final financial figures.
+
+Application retention is controlled by `RETENTION_ENABLED` and `RETENTION_DAYS`. When enabled, scheduled cleanup removes old assistant conversations/messages and query-audit records; it does not remove ledger records, approvals, reminders or notifications. Request logs intentionally exclude assistant question bodies and authorization headers. External provider retention, training use and regional processing are **UNVERIFIED** in this repository and must be confirmed from authoritative provider policy/configuration before enabling Gemini for real customer data.
 
 ## P1 — product/API completion and release coverage
 
@@ -196,7 +204,7 @@ The recommended default is A for the normal ledger response if the implementatio
 ## P2 — testing, performance and operations
 
 - Load testing: no production-shaped workload or measured breaking point is yet recorded.
-- Query and pagination performance: no production-scale `EXPLAIN ANALYZE` review or cursor stress report yet.
+- Query and pagination performance: representative seeded-scale `EXPLAIN ANALYZE` plans now exist; production-scale review and cursor stress evidence remain open.
 - Frontend production audit: build and smoke coverage good locally, but production edge states and accessibility remain open.
 - Observability: request logging and health checks exist, but centralized metrics, logs and alerts are not yet deployed and verified.
 - Container and deployment verification: Docker, HTTPS, proxy behavior, database roles, migrations and rollback rehearsal are not yet proven in a real environment.

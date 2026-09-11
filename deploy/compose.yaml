@@ -1,9 +1,33 @@
 services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ledger
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set the database owner password}
+      LEDGER_RUNTIME_PASSWORD: ${LEDGER_RUNTIME_PASSWORD:?Set the runtime role password}
+      LEDGER_READONLY_PASSWORD: ${LEDGER_READONLY_PASSWORD:?Set the read-only role password}
+    ports: ["5432:5432"]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ../backend/scripts/01-runtime-roles.sh:/docker-entrypoint-initdb.d/01-runtime-roles.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d ledger"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 5s
+    restart: unless-stopped
   backend:
     build:
       context: ../backend
       target: runtime
     env_file: ../backend/.env.production
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost:3000/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
@@ -29,13 +53,16 @@ services:
       driver: json-file
       options: { max-size: "10m", max-file: "5" }
   migrate:
-    profiles: [maintenance]
     build:
       context: ../backend
       target: build
+    depends_on:
+      db:
+        condition: service_healthy
     environment:
       DATABASE_URL: ${MIGRATION_DATABASE_URL:?Set the dedicated migration connection}
     command: ["npx", "prisma", "migrate", "deploy"]
 volumes:
+  pgdata:
   caddy_data:
   caddy_config:
