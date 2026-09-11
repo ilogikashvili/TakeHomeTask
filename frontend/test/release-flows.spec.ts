@@ -57,14 +57,29 @@ test('logout revokes the credential and an expired session returns to sign-in', 
 });
 
 test('vendor clarification resolves only the chosen candidate', async ({ page }) => {
-  const { headers } = await login(page);
-  const ledger = await (await page.request.get('/api/line-items', { headers })).json();
-  const name: string = ledger.items[0].vendorName;
-  await page.getByRole('link', { name: 'Assistant', exact: false }).click();
-  await page.getByLabel('Ask a question').fill('Spend for "' + name.slice(0, -1) + '"');
-  await page.getByRole('button', { name: 'Send', exact: false }).click();
-  await page.getByRole('button', { name, exact: true }).click();
-  await expect(page.getByRole('link', { name: 'View matching subscriptions' })).toBeVisible();
-  await page.getByRole('link', { name: 'View matching subscriptions' }).click();
-  await expect(page.getByRole('combobox', { name: 'Vendor', exact: true })).toHaveValue(ledger.items[0].vendorId);
+  const { headers, user, vendors } = await login(page);
+  const vendor = vendors.find((entry) => {
+    const prefix = entry.name.slice(0, -1).toLowerCase();
+    return vendors.filter((candidate) => candidate.name.toLowerCase().startsWith(prefix)).length > 1;
+  }) ?? vendors[0];
+  const candidates = vendors.filter((candidate) => candidate.name.toLowerCase().startsWith(vendor.name.slice(0, -1).toLowerCase())).slice(0, 2);
+  const fixtureName = 'Clarification fixture ' + Date.now();
+  const fixtureIds: string[] = [];
+  try {
+    for (const candidate of candidates) {
+      const response = await page.request.post('/api/line-items', { headers, data: { ownerId: user.ownerId, vendorId: candidate.id,
+        name: fixtureName + ' ' + candidate.id, category: 'release-test', description: 'Browser clarification fixture', amount: '10.00', billingPeriod: 'MONTHLY', startDate: '2026-01-01', endDate: '2040-01-01' } });
+      expect(response.status()).toBe(201); fixtureIds.push((await response.json()).id);
+    }
+    await page.getByRole('link', { name: 'Assistant', exact: false }).click();
+    await page.getByLabel('Ask a question').fill('Spend for "' + vendor.name.slice(0, -1) + '"');
+    await page.getByRole('button', { name: 'Send', exact: false }).click();
+    await page.getByRole('button', { name: vendor.name, exact: true }).click();
+    await expect(page.getByRole('link', { name: 'View matching subscriptions' })).toBeVisible();
+    await page.getByRole('link', { name: 'View matching subscriptions' }).click();
+    await expect(page.getByRole('combobox', { name: 'Vendor', exact: true })).toHaveValue(vendor.id);
+  } finally {
+    const items = (await (await page.request.get('/api/line-items?search=' + encodeURIComponent(fixtureName), { headers })).json()).items;
+    for (const item of items.filter((item: { id: string }) => fixtureIds.includes(item.id))) await page.request.delete(`/api/line-items/${item.id}?expectedVersion=${item.version}`, { headers });
+  }
 });
