@@ -13,6 +13,7 @@ import { ConflictException, NotFoundException } from '@nestjs/common';
 
 export interface LedgerRow {
 	id: string;
+	reference: string;
 	version: number;
 	vendorId: string;
 	vendorName: string;
@@ -25,6 +26,7 @@ export interface LedgerRow {
 	startDate: Date;
 	endDate: Date;
 	renewalDate: Date | null;
+	autoRenew: boolean;
 }
 
 export interface LedgerAggregates {
@@ -39,21 +41,30 @@ export interface LedgerAggregates {
 export class LineItemsRepository {
 	constructor(private readonly prisma: PrismaService, private readonly readonlyDb: ReadonlyDbService) {}
 
+	findById(id: string, ownerId?: string) {
+		return this.prisma.lineItem.findFirst({
+			where: { id, deletedAt: null, ...(ownerId ? { ownerId } : {}) },
+			include: { vendor: true, owner: { select: { id: true, name: true, email: true } }, approvals: { orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], include: { actor: { select: { id: true, name: true } } } } },
+		});
+	}
+
 	create(dto: CreateLineItemDto, actorId: string) {
 		validateLineItemInvariants(dto);
 		return this.prisma.$transaction(async tx => {
 		const item = await tx.lineItem.create({
 			data: {
+				reference: dto.reference || undefined,
 				vendorId: dto.vendorId,
 				ownerId: dto.ownerId,
 				name: dto.name,
 				category: dto.category,
-				description: dto.description,
+				description: dto.description || undefined,
 				billingPeriod: dto.billingPeriod,
 				amount: new Prisma.Decimal(dto.amount),
 				startDate: new Date(dto.startDate),
 				endDate: new Date(dto.endDate),
 				renewalDate: dto.renewalDate ? new Date(dto.renewalDate) : null,
+				autoRenew: dto.autoRenew ?? false,
 			},
 		});
 		await tx.approvalEvent.create({ data: { lineItemId: item.id, actorId, action: 'CREATED', toStatus: 'DRAFT' } });
@@ -75,15 +86,17 @@ export class LineItemsRepository {
 
 			if (!await transaction.owner.findUnique({ where: { id: dto.actorId } })) throw new NotFoundException('Actor not found');
 			const data: Prisma.LineItemUncheckedUpdateInput = {
+				reference: dto.reference === '' ? undefined : dto.reference,
 				ownerId: dto.ownerId,
 				name: dto.name,
 				category: dto.category,
-				description: dto.description,
+				description: dto.description === '' ? undefined : dto.description,
 				billingPeriod: dto.billingPeriod,
 				amount: dto.amount === undefined ? undefined : new Prisma.Decimal(dto.amount),
 				startDate: dto.startDate === undefined ? undefined : new Date(dto.startDate),
 				endDate: dto.endDate === undefined ? undefined : new Date(dto.endDate),
 				renewalDate: dto.renewalDate === undefined ? undefined : dto.renewalDate === null ? null : new Date(dto.renewalDate),
+				autoRenew: dto.autoRenew,
 				status: dto.status,
 				version: { increment: 1 },
 			};
@@ -166,7 +179,7 @@ export class LineItemsRepository {
 		const orderBy = buildOrderBy(query.sort ?? LedgerSortField.RENEWAL_DATE, query.direction ?? SortDirection.ASC);
 		const limit = Math.min(query.limit ?? 25, 100);
 		const rows = await database.$queryRawUnsafe<LedgerRow[]>(
-			`SELECT li."id", li."version", li."vendorId", v."name" AS "vendorName", li."ownerId", li."name", li."category", li."status", li."billingPeriod", li."amount"::text AS "amount", li."startDate", li."endDate", li."renewalDate"
+			`SELECT li."id", li."reference", li."version", li."vendorId", v."name" AS "vendorName", li."ownerId", li."name", li."category", li."status", li."billingPeriod", li."amount"::text AS "amount", li."startDate", li."endDate", li."renewalDate", li."autoRenew"
 			 FROM "LineItem" li
 			 JOIN "Vendor" v ON v."id" = li."vendorId"
 			 WHERE ${where.sql}

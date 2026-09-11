@@ -1,18 +1,38 @@
 services:
   db:
-    image: postgres:16-alpine
+    image: postgres:18-alpine
     environment:
       POSTGRES_DB: ledger
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set the database owner password}
       LEDGER_RUNTIME_PASSWORD: ${LEDGER_RUNTIME_PASSWORD:?Set the runtime role password}
       LEDGER_READONLY_PASSWORD: ${LEDGER_READONLY_PASSWORD:?Set the read-only role password}
-    ports: ["5432:5432"]
+    # Database access stays on the Compose network; no host/public database port.
+    command:
+      - postgres
+      - -c
+      - ssl=on
+      - -c
+      - ssl_cert_file=/etc/postgresql/tls/server.crt
+      - -c
+      - ssl_key_file=/etc/postgresql/tls/server.key
+      - -c
+      - ssl_min_protocol_version=TLSv1.2
+      - -c
+      - password_encryption=scram-sha-256
+      - -c
+      - hba_file=/etc/postgresql/pg_hba.conf
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - pgdata:/var/lib/postgresql
       - ../backend/scripts/01-runtime-roles.sh:/docker-entrypoint-initdb.d/01-runtime-roles.sh:ro
+      - ./postgres/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
+      - type: bind
+        source: ${POSTGRES_TLS_DIR:?Set the absolute host directory containing server.crt and server.key}
+        target: /etc/postgresql/tls
+        read_only: true
+        bind: { create_host_path: false }
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d ledger"]
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U postgres -d ledger"]
       interval: 5s
       timeout: 5s
       retries: 12
@@ -23,6 +43,12 @@ services:
       context: ../backend
       target: runtime
     env_file: ../backend/.env.production
+    volumes:
+      - type: bind
+        source: ${POSTGRES_CA_DIR:?Set the absolute host directory containing only ca.crt}
+        target: /etc/ledger/db-trust
+        read_only: true
+        bind: { create_host_path: false }
     depends_on:
       db:
         condition: service_healthy
@@ -61,7 +87,13 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: ${MIGRATION_DATABASE_URL:?Set the dedicated migration connection}
-    command: ["npx", "prisma", "migrate", "deploy"]
+    volumes:
+      - type: bind
+        source: ${POSTGRES_CA_DIR:?Set the absolute host directory containing only ca.crt}
+        target: /etc/ledger/db-trust
+        read_only: true
+        bind: { create_host_path: false }
+    command: ["sh", "-c", "npx prisma migrate deploy && node scripts/apply-runtime-grants.cjs"]
 volumes:
   pgdata:
   caddy_data:

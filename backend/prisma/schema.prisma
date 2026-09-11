@@ -11,6 +11,8 @@ enum LineItemStatus {
   DRAFT
   ACTIVE
   PENDING_APPROVAL
+  EXPIRING
+  EXPIRED
   TERMINATED
 }
 
@@ -78,6 +80,7 @@ model Vendor {
 
 model LineItem {
   id             String         @id @default(uuid()) @db.Uuid
+  reference      String         @unique @default(uuid())
   vendorId       String         @db.Uuid
   ownerId        String         @db.Uuid
   name           String
@@ -89,6 +92,7 @@ model LineItem {
   startDate      DateTime       @db.Date
   endDate        DateTime       @db.Date
   renewalDate    DateTime?      @db.Date
+  autoRenew      Boolean        @default(false)
   version        Int            @default(1)
   deletedAt      DateTime?
   createdAt      DateTime       @default(now())

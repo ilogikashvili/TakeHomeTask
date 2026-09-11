@@ -24,7 +24,7 @@ The model never produces SQL or financial figures. `intent-schema-v1` is the cur
 
 ## Deployment components
 
-`deploy/compose.yaml` runs the backend, Caddy web proxy and an explicit maintenance migration profile. The runtime image is non-root and receives secrets at runtime. PostgreSQL roles are separated into migration, runtime and read-only responsibilities.
+`deploy/compose.yaml` runs PostgreSQL 18, the backend, Caddy web proxy and a migration service with no profile. Database health gates migration startup; successful migration and role-grant completion gates backend startup; backend health gates web startup. The runtime image is non-root and receives secrets at runtime. PostgreSQL roles are separated into migration, runtime and read-only responsibilities, with explicit table/column grants recorded in [the deployment contract](deploy/DEPLOYMENT_CONTRACT.md).
 
 ## Consistency and recovery
 

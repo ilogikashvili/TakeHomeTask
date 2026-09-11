@@ -28,6 +28,11 @@ export class LineItemsController {
 		return this.service.exportCsv(query, user);
 	}
 
+	@Get(':id')
+	getDetail(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
+		return this.service.getDetail(id, user);
+	}
+
 	@Post('bulk')
 	bulk(@Body() dto: BulkActionDto, @CurrentUser() user: AuthUser) {
 		return this.service.bulk(dto, user);

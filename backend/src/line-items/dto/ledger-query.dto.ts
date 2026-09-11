@@ -1,6 +1,6 @@
 import { IsCalendarDate, DecimalInput } from '../../common/validation';
 import { Type } from 'class-transformer';
-import { IsEnum, IsIn, IsInt, IsNumber, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator';
+import { IsBoolean, IsEnum, IsIn, IsInt, IsNumber, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator';
 
 export enum LedgerSortField {
 	AMOUNT = 'amount',
@@ -20,6 +20,8 @@ export enum LedgerStatus {
 	DRAFT = 'DRAFT',
 	ACTIVE = 'ACTIVE',
 	PENDING_APPROVAL = 'PENDING_APPROVAL',
+	EXPIRING = 'EXPIRING',
+	EXPIRED = 'EXPIRED',
 	TERMINATED = 'TERMINATED',
 }
 
@@ -63,6 +65,14 @@ export class LedgerQueryDto {
 	renewalTo?: string;
 
 	@IsOptional()
+	@IsCalendarDate()
+	startFrom?: string;
+
+	@IsOptional()
+	@IsCalendarDate()
+	startTo?: string;
+
+	@IsOptional()
 	@IsString()
 	search?: string;
 
@@ -84,4 +94,8 @@ export class LedgerQueryDto {
 	@IsOptional()
 	@IsIn(Object.values(SortDirection))
 	direction: SortDirection = SortDirection.ASC;
+
+	@IsOptional()
+	@IsBoolean()
+	unapprovedOnly?: boolean;
 }

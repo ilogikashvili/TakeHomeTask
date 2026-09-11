@@ -17,6 +17,12 @@ describe('Gemini provider boundary', () => {
     jest.spyOn(global, 'fetch').mockResolvedValue(new Response(JSON.stringify({ candidates: [{ finishReason: 'STOP', content: { parts: [{ text: '{"intent":"vendor_spend","ownerId":"foreign"}' }] } }] }), { status: 200 }));
     await expect(service.interpret('Spend?')).rejects.toThrow();
   });
+  it('treats literal undefined/null values as disabled provider configuration', () => {
+    const disabled = new GeminiService(new ConfigService({ GEMINI_API_KEY: 'undefined', GEMINI_MODEL: 'undefined' }));
+    const nullish = new GeminiService(new ConfigService({ GEMINI_API_KEY: 'null', GEMINI_MODEL: 'null' }));
+    expect(disabled.enabled).toBe(false);
+    expect(nullish.enabled).toBe(false);
+  });
   it('retries a transient error once and stops', async () => {
     const mock = jest.spyOn(global, 'fetch').mockImplementation(async () => new Response('', { status: 503 }));
     await expect(service.interpret('Spend?')).rejects.toThrow('Assistant provider is unavailable');

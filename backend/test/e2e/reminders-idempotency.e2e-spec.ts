@@ -6,11 +6,13 @@ import { RemindersService } from '../../src/reminders/reminders.service';
 import { RemindersRepository } from '../../src/reminders/reminders.repository';
 import { Prisma } from '@prisma/client';
 import { LineItemsRepository } from '../../src/line-items/line-items.repository';
+import { ReminderScannerService } from '../../src/reminders/reminder-scanner.service';
 
 describe('reminders idempotency', () => {
   let app: INestApplication;
   let prisma: PrismaService;
   let reminders: RemindersService;
+  let scanner: ReminderScannerService;
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
@@ -18,10 +20,42 @@ describe('reminders idempotency', () => {
     await app.init();
     prisma = app.get(PrismaService);
     reminders = app.get(RemindersService);
+    scanner = app.get(ReminderScannerService);
   });
 
   afterAll(async () => {
     await app.close();
+  });
+
+  it('reconciles eligible renewal windows on startup without duplicating reminders', async () => {
+    const source = await prisma.lineItem.findFirstOrThrow({ where: { status: 'ACTIVE' } });
+    const renewalDate = new Date(Date.now() + 10 * 86400000);
+    const item = await prisma.lineItem.create({ data: {
+      vendorId: source.vendorId,
+      ownerId: source.ownerId,
+      name: 'Startup sweep fixture',
+      category: 'test',
+      amount: 1,
+      billingPeriod: 'MONTHLY',
+      startDate: new Date(Date.now() - 86400000),
+      endDate: new Date(Date.now() + 30 * 86400000),
+      renewalDate,
+      status: 'ACTIVE',
+    } });
+
+    try {
+      await scanner.onApplicationBootstrap();
+      expect(await prisma.reminder.count({ where: { lineItemId: item.id } })).toBe(1);
+      expect(await prisma.notification.count({ where: { reminder: { lineItemId: item.id } } })).toBe(1);
+
+      await scanner.onApplicationBootstrap();
+      expect(await prisma.reminder.count({ where: { lineItemId: item.id } })).toBe(1);
+      expect(await prisma.notification.count({ where: { reminder: { lineItemId: item.id } } })).toBe(1);
+    } finally {
+      await prisma.notification.deleteMany({ where: { reminder: { lineItemId: item.id } } });
+      await prisma.reminder.deleteMany({ where: { lineItemId: item.id } });
+      await prisma.lineItem.delete({ where: { id: item.id } });
+    }
   });
 
   it('inserts one reminder per line item under concurrent scans', async () => {

@@ -115,44 +115,12 @@ describe('assistant task acceptance', () => {
 
   it('resolves a unique vendor typo without guessing', async () => {
     const vendor = await prisma.vendor.create({ data: { name: 'Microsoft', normalizedName: 'microsoft', category: 'software' } });
-    await prisma.lineItem.create({ data: {
-      ownerId,
-      vendorId: vendor.id,
-      category: 'software',
-      name: 'microsoft typo contract',
-      amount: '100.00',
-      billingPeriod: 'MONTHLY',
-      startDate: new Date('2025-01-01'),
-      endDate: new Date('2025-12-31'),
-      renewalDate: new Date('2025-02-01'),
-      status: 'ACTIVE',
-    } });
-    const response = await fetch(`${url}/assistant/ask`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
-      body: JSON.stringify({ question: 'How much do we pay micro soft?' }),
-    });
-    const body = await response.json() as { status: string; filters?: { vendorId?: string } };
-    expect(response.status).toBe(201);
-    expect(body.status).toBe('answered');
-    expect(body.filters?.vendorId).toBe(vendor.id);
-    await prisma.lineItem.deleteMany({ where: { name: 'microsoft typo contract', ownerId } });
-    await prisma.vendor.delete({ where: { id: vendor.id } });
-  });
-
-  it('requires clarification when multiple vendor candidates are plausible', async () => {
-    await prisma.vendor.createMany({ data: [
-      { name: 'Microsoft', normalizedName: 'microsoft', category: 'software' },
-      { name: 'Microsoft Azure', normalizedName: 'microsoftazure', category: 'software' },
-      { name: 'Microsoft 365', normalizedName: 'microsoft365', category: 'software' },
-    ] });
-    const vendorIds = await prisma.vendor.findMany({ where: { name: { in: ['Microsoft', 'Microsoft Azure', 'Microsoft 365'] } }, select: { id: true } });
-    for (const vendorId of vendorIds) {
+    try {
       await prisma.lineItem.create({ data: {
         ownerId,
-        vendorId: vendorId.id,
+        vendorId: vendor.id,
         category: 'software',
-        name: `ambiguous vendor ${vendorId.id}`,
+        name: 'microsoft typo contract',
         amount: '100.00',
         billingPeriod: 'MONTHLY',
         startDate: new Date('2025-01-01'),
@@ -160,16 +128,107 @@ describe('assistant task acceptance', () => {
         renewalDate: new Date('2025-02-01'),
         status: 'ACTIVE',
       } });
+      const response = await fetch(`${url}/assistant/ask`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+        body: JSON.stringify({ question: 'How much do we pay micro soft?' }),
+      });
+      const body = await response.json() as { status: string; filters?: { vendorId?: string } };
+      expect(response.status).toBe(201);
+      expect(body.status).toBe('answered');
+      expect(body.filters?.vendorId).toBe(vendor.id);
+    } finally {
+      await prisma.lineItem.deleteMany({ where: { name: 'microsoft typo contract', ownerId } });
+      await prisma.vendor.delete({ where: { id: vendor.id } });
     }
-    const response = await fetch(`${url}/assistant/ask`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
-      body: JSON.stringify({ question: 'How much do we pay micro soft?' }),
+  });
+
+  it('requires clarification when multiple vendor candidates are plausible', async () => {
+    let createdVendors: Array<{ id: string }> = [];
+    try {
+      createdVendors = await prisma.vendor.createManyAndReturn({ data: [
+        { name: 'Microsoft', normalizedName: 'microsoft', category: 'software' },
+        { name: 'Microsoft Azure', normalizedName: 'microsoftazure', category: 'software' },
+        { name: 'Microsoft 365', normalizedName: 'microsoft365', category: 'software' },
+      ] });
+      for (const vendorId of createdVendors) {
+        await prisma.lineItem.create({ data: {
+          ownerId,
+          vendorId: vendorId.id,
+          category: 'software',
+          name: `ambiguous vendor ${vendorId.id}`,
+          amount: '100.00',
+          billingPeriod: 'MONTHLY',
+          startDate: new Date('2025-01-01'),
+          endDate: new Date('2025-12-31'),
+          renewalDate: new Date('2025-02-01'),
+          status: 'ACTIVE',
+        } });
+      }
+      const response = await fetch(`${url}/assistant/ask`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+        body: JSON.stringify({ question: 'How much do we pay micro?' }),
+      });
+      const body = await response.json() as { status: string; question?: string; candidates?: unknown[] };
+      expect(response.status).toBe(201);
+      expect(body.status).toBe('clarification_required');
+    } finally {
+      if (createdVendors.length) {
+        await prisma.lineItem.deleteMany({ where: { vendorId: { in: createdVendors.map((entry) => entry.id) } } });
+        await prisma.vendor.deleteMany({ where: { id: { in: createdVendors.map((entry) => entry.id) } } });
+      }
+    }
+  });
+
+  it('compares services vendors across the current and previous quarter', async () => {
+    const cleanOwner = await prisma.owner.create({
+      data: {
+        name: `Services comparison owner ${randomUUID()}`,
+        email: `services-comp-${randomUUID()}@example.com`,
+      },
     });
-    const body = await response.json() as { status: string; question?: string; candidates?: unknown[] };
-    expect(response.status).toBe(201);
-    expect(body.status).toBe('clarification_required');
-    await prisma.lineItem.deleteMany({ where: { ownerId, name: { startsWith: 'ambiguous vendor ' } } });
-    await prisma.vendor.deleteMany({ where: { name: { in: ['Microsoft', 'Microsoft Azure', 'Microsoft 365'] } } });
+    const cleanToken = app.get(AuthService).sign({ sub: cleanOwner.id, role: 'owner', ownerId: cleanOwner.id });
+    const now = new Date();
+    const quarter = Math.floor(now.getUTCMonth() / 3);
+    const currentStart = new Date(Date.UTC(now.getUTCFullYear(), quarter * 3, 1));
+    const previousStart = new Date(Date.UTC(now.getUTCFullYear(), quarter * 3 - 3, 1));
+    const currentVendor = await prisma.vendor.findFirstOrThrow({ where: { category: 'services' } });
+    const previousVendor = await prisma.vendor.findFirstOrThrow({ where: { category: 'services', id: { not: currentVendor.id } } });
+    const ids: string[] = [];
+    for (const fixture of [
+      { vendorId: currentVendor.id, amount: '300', startDate: currentStart },
+      { vendorId: currentVendor.id, amount: '100', startDate: previousStart },
+      { vendorId: previousVendor.id, amount: '50', startDate: currentStart },
+      { vendorId: previousVendor.id, amount: '100', startDate: previousStart },
+    ]) {
+      const item = await prisma.lineItem.create({ data: { ownerId: cleanOwner.id, vendorId: fixture.vendorId, category: 'services', name: `quarter comparison ${randomUUID()}`, amount: fixture.amount, billingPeriod: 'MONTHLY', startDate: fixture.startDate, endDate: new Date(fixture.startDate.getTime() + 180 * 86400000) } });
+      ids.push(item.id);
+    }
+    try {
+      const response = await fetch(`${url}/assistant/ask`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${cleanToken}` }, body: JSON.stringify({ question: 'Which vendors drove the increase in services spend this quarter compared to last?' }) });
+      const body = await response.json() as { status: string; comparison?: { changes: Array<{ vendorId: string; increase: number }> } };
+      expect(response.status).toBe(201);
+      expect(body.status).toBe('answered');
+      expect(body.comparison?.changes.find((change) => change.vendorId === currentVendor.id)?.increase).toBe(200);
+      expect(body.comparison?.changes.some((change) => change.vendorId === previousVendor.id)).toBe(true);
+    } finally {
+      await prisma.lineItem.deleteMany({ where: { id: { in: ids } } });
+      await prisma.owner.delete({ where: { id: cleanOwner.id } });
+    }
+  });
+
+  it('returns next-60-day renewals without qualifying approval history', async () => {
+    const renewalDate = new Date(Date.now() + 45 * 86400000);
+    const vendor = await prisma.vendor.findFirstOrThrow();
+    const item = await prisma.lineItem.create({ data: { ownerId, vendorId: vendor.id, category: 'services', name: `unapproved renewal ${randomUUID()}`, amount: 25, billingPeriod: 'MONTHLY', startDate: new Date('2025-01-01'), endDate: new Date('2030-01-01'), renewalDate, status: 'PENDING_APPROVAL' } });
+    try {
+      const response = await fetch(`${url}/assistant/ask`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` }, body: JSON.stringify({ question: 'What renews in the next 60 days that nobody has approved?' }) });
+      const body = await response.json() as { status: string; matchingLineItemIds?: string[]; filters?: { unapprovedOnly?: boolean } };
+      expect(response.status).toBe(201);
+      expect(body.status).toBe('answered');
+      expect(body.filters?.unapprovedOnly).toBe(true);
+      expect(body.matchingLineItemIds).toContain(item.id);
+    } finally { await prisma.lineItem.delete({ where: { id: item.id } }); }
   });
 });

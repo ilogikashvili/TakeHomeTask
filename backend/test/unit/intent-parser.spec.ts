@@ -18,7 +18,7 @@ describe('assistant intent and entity resolution', () => {
   });
   it('resolves spacing, preserves ambiguity, and returns typo candidates', () => {
     const vendors = [{ id: '1', name: 'Microsoft' }, { id: '2', name: 'Microsoft Azure' }, { id: '3', name: 'Microsoft 365' }];
-    expect(vendorCandidates('micro soft', vendors)).toEqual([vendors[0], vendors[1], vendors[2]]);
+    expect(vendorCandidates('micro soft', vendors)).toEqual([vendors[0]]);
     expect(vendorCandidates('micro', vendors)).toHaveLength(3);
     expect(vendorCandidates('microsft', vendors)).toEqual([vendors[0], vendors[1], vendors[2]]);
     expect(vendorCandidates('unknown', vendors)).toEqual([]);

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { date, Identity, json, Ledger, Lookup, money, request, Row } from './api';
 import { ItemEditor } from './ItemEditor';
 
-const statuses = ['DRAFT', 'ACTIVE', 'PENDING_APPROVAL', 'TERMINATED'];
+const statuses = ['DRAFT', 'PENDING_APPROVAL', 'ACTIVE', 'EXPIRING', 'EXPIRED', 'TERMINATED'];
 type Props = { query: string; token: string; user: Identity; owners: Lookup[]; vendors: Lookup[]; navigate: (path: string) => void };
 export function LedgerView({ query, token, user, owners, vendors, navigate }: Props) {
   const initial = Object.fromEntries(new URLSearchParams(query));
