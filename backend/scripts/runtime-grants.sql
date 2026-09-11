@@ -62,9 +62,9 @@ GRANT DELETE ON "QueryAudit", "AssistantConversation", "RevokedToken", "UsageBuc
 
 -- Canonical assistant page/aggregate SQL and filters (description search).
 -- Owner resolution and vendor clarification use the runtime connection.
-GRANT SELECT ("id", "version", "vendorId", "ownerId", "name", "category",
+GRANT SELECT ("id", "reference", "version", "vendorId", "ownerId", "name", "category",
   "status", "billingPeriod", "amount", "startDate", "endDate", "renewalDate",
-  "deletedAt", "description") ON "LineItem" TO ledger_readonly;
+  "autoRenew", "deletedAt", "description") ON "LineItem" TO ledger_readonly;
 GRANT SELECT ("id", "name") ON "Vendor" TO ledger_readonly;
 -- UUID/text keys: no sequences. Neither login can access _prisma_migrations.
 COMMIT;

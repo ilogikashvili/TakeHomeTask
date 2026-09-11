@@ -256,7 +256,7 @@ describe('fresh deployment database privilege contract', () => {
       Reminder: ['ownerId', 'dismissedAt'], Notification: ['ownerId', 'readAt'], AssistantConversation: ['updatedAt'], UsageBucket: ['count'],
     };
     const ro: Record<string, string[]> = {
-      LineItem: ['id', 'version', 'vendorId', 'ownerId', 'name', 'category', 'status', 'billingPeriod', 'amount', 'startDate', 'endDate', 'renewalDate', 'deletedAt', 'description'],
+      LineItem: ['id', 'reference', 'version', 'vendorId', 'ownerId', 'name', 'category', 'status', 'billingPeriod', 'amount', 'startDate', 'endDate', 'renewalDate', 'autoRenew', 'deletedAt', 'description'],
       Vendor: ['id', 'name'],
     };
     const columns = await admin.query<{ table: string; column: string; oid: number; attnum: number }>(`SELECT c.relname AS table, a.attname AS column, c.oid, a.attnum

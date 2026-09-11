@@ -40,11 +40,15 @@ async function main() {
     env.PGHOST = url.hostname;
     env.PGPORT = url.port || '5432';
     env.PGPASSWORD = decodeURIComponent(url.password);
-    env.PGSSLMODE = url.searchParams.get('sslmode') || 'prefer';
+    const sslmode = url.searchParams.get('sslmode');
+    if (sslmode) env.PGSSLMODE = sslmode;
+    else delete env.PGSSLMODE;
     if (url.searchParams.has('sslcert')) {
       env.PGSSLROOTCERT = url.searchParams.get('sslcert');
       // libpq can verify hostname; Prisma's require+strict is its equivalent.
       env.PGSSLMODE = 'verify-full';
+    } else {
+      delete env.PGSSLROOTCERT;
     }
     env.POSTGRES_USER = decodeURIComponent(url.username);
     env.POSTGRES_DB = db;
