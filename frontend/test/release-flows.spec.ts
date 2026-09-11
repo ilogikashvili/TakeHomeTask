@@ -59,12 +59,18 @@ test('logout revokes the credential and an expired session returns to sign-in', 
 test('vendor clarification resolves only the chosen candidate', async ({ page }) => {
   const { headers } = await login(page);
   const ledger = await (await page.request.get('/api/line-items', { headers })).json();
-  const name: string = ledger.items[0].vendorName;
+  const scopedVendors = Array.from(new Map((ledger.items as Array<{ vendorId: string; vendorName: string }>).map((item) => [item.vendorId, { id: item.vendorId, name: item.vendorName }])).values());
+  const vendor = scopedVendors.find((entry: { name: string }) => {
+    const prefix = entry.name.slice(0, -1).toLowerCase();
+    const matches = scopedVendors.filter((candidate: { name: string }) => candidate.name.toLowerCase().startsWith(prefix));
+    return matches.length > 1;
+  }) ?? scopedVendors[0];
+  const name = vendor.name;
   await page.getByRole('link', { name: 'Assistant', exact: false }).click();
   await page.getByLabel('Ask a question').fill('Spend for "' + name.slice(0, -1) + '"');
   await page.getByRole('button', { name: 'Send', exact: false }).click();
   await page.getByRole('button', { name, exact: true }).click();
   await expect(page.getByRole('link', { name: 'View matching subscriptions' })).toBeVisible();
   await page.getByRole('link', { name: 'View matching subscriptions' }).click();
-  await expect(page.getByRole('combobox', { name: 'Vendor', exact: true })).toHaveValue(ledger.items[0].vendorId);
+  await expect(page.getByRole('combobox', { name: 'Vendor', exact: true })).toHaveValue(vendor.id);
 });
