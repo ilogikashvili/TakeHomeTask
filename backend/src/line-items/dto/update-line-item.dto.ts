@@ -1,6 +1,6 @@
 import { IsCalendarDate, DecimalInput, OptionalField } from '../../common/validation';
 import { Type } from 'class-transformer';
-import { IsEnum, IsInt, IsNumber, IsOptional, IsString, IsUUID, Max, Min, MinLength } from 'class-validator';
+import { IsEnum, IsInt, IsNumber, IsOptional, IsString, IsUUID, Max, MaxLength, Min, MinLength } from 'class-validator';
 import { BillingPeriod, LineItemStatus } from '@prisma/client';
 
 export class UpdateLineItemDto {
@@ -16,14 +16,17 @@ export class UpdateLineItemDto {
 	@OptionalField()
 	@IsString()
 	@MinLength(1)
+	@MaxLength(200)
 	name?: string;
 
 	@OptionalField()
 	@IsString()
+	@MaxLength(100)
 	category?: string;
 
 	@OptionalField()
 	@IsString()
+	@MaxLength(2000)
 	description?: string;
 
 	@OptionalField()

@@ -34,7 +34,7 @@ Current assessment: a working full-stack demonstration with substantive correctn
 - [x] CI workflow written for backend validation/tests/build and frontend build/browser tests. Remote CI has not run.
 - [x] Docker entrypoint corrected to actual build output, non-root runtime selected and secrets excluded from build context. Docker execution has not been verified.
 
-Local verification: **61 unit tests, 54 PostgreSQL E2E tests, 4 browser tests**, Prisma validation/generation, migration deployment/status, backend/frontend builds, backend lint and high-severity dependency audits pass. Live Gemini adapter smoke tests pass; full compiled `/assistant/ask` verification is still being rerun after bootstrap wiring fixes.
+Local verification: **62 unit tests, 68 PostgreSQL E2E tests, 6 browser tests**, Prisma validation/generation, migration deployment/status, backend/frontend builds, backend lint and high-severity dependency audits pass. The compiled deterministic `/assistant/ask` path is covered; live Gemini production evaluation remains separate and unverified here.
 
 ## P0 — Required before serving real customer data
 
@@ -43,7 +43,7 @@ Local verification: **61 unit tests, 54 PostgreSQL E2E tests, 4 browser tests**,
 - [ ] Triage and remediate dependency findings. Current npm runtime audit reports 12 high-severity dependency paths; document reachability and any accepted exceptions.
 - [ ] Configure HTTPS, production frontend proxy/origins, secret storage and separate least-privilege database roles.
 - [ ] Add abuse controls: request/provider rate limits, cost quotas and bounded expensive queries/exports/conversation context.
-- [ ] Guarantee consistent row/aggregate snapshots within a response and CSV snapshot behavior under concurrent writes.
+- [x] Guarantee consistent row/aggregate snapshots within a response and CSV snapshot behavior under concurrent writes with repeatable-read transactions; serializable conflict guarantees are not claimed.
 - [ ] Test scanner-versus-reassignment/delete races and define notification handover/read-state semantics.
 - [ ] Implement readiness checks, metrics, alerts, persistent log handling and operational runbooks.
 - [ ] Configure backups and demonstrate restoration against agreed recovery time/data-loss targets.
@@ -52,12 +52,12 @@ Local verification: **61 unit tests, 54 PostgreSQL E2E tests, 4 browser tests**,
 
 ## P1 — Product/API completion and release coverage
 
-- [ ] Explicit response DTOs and detailed Swagger schemas for all routes.
+- [x] Explicit response contracts and generated Swagger schemas cover all 19 production routes through the centralized OpenAPI contract layer; detailed per-route DTO classes remain a future documentation refinement.
 - [ ] Finish amount upper-bound validation, consistent conflict semantics and complete audit coverage of individual mutations.
-- [ ] Verify the complete Gemini-backed `/assistant/ask` path with configured credentials/model; direct adapter smoke tests pass, while compiled HTTP verification and the full representative evaluation set remain open.
+- [x] Verify the compiled deterministic `/assistant/ask` HTTP path with arithmetic, vendor, typo, follow-up, mutation refusal and large-result cases; live Gemini credentials/evaluation and malformed-provider boundary cases remain separately covered/unverified.
 - [ ] Replace string-based follow-up concatenation with structured bounded conversation state.
-- [ ] Broaden browser tests to admin bulk operations, edit conflicts, candidate selection, live reminder arrival/dismissal, expired sessions, accessibility and supported browsers.
-- [ ] Review data retention, conversation/audit access and provider-data handling.
+- [ ] Broaden browser tests to live reminder arrival/dismissal, accessibility tooling, supported browsers and additional failure paths; focused accessibility, admin bulk, edit conflict, candidate selection and expiry checks now pass.
+- [x] Review application-side data retention, conversation/audit access and provider-data handling; external provider retention/training terms remain unverified.
 - [ ] Verify a genuinely fresh checkout against an empty database; document complete deployment and reviewer setup.
 
 ## Conditional or optional improvements
@@ -115,12 +115,12 @@ Status meanings: **Done** has repository or local test evidence; **Partial** has
 
 ### P2 - Testing, performance, frontend and documentation
 
-- [ ] 32. Security test suite: **Partial**. Relevant unit/E2E cases exist; the dedicated authentication/authorization/IDOR/injection/rate-limit/CSV/assistant/privilege suite is not organized or complete.
+- [ ] 32. Security test suite: **Partial**. Focused authentication/authorization/IDOR/injection/rate-limit/CSV/assistant/privilege boundary cases now pass; a complete organized malicious-input matrix remains open.
 - [ ] 33. Load testing: **Open**. No k6 or equivalent workload, concurrency profile or measured breaking point is recorded.
 - [ ] 34. Pagination stress: **Partial**. Cursor ordering and aggregate behavior are tested; 10-to-100,000+ scale evidence is missing.
-- [ ] 35. Query performance: **Open**. No recorded `EXPLAIN ANALYZE` review for the important filter, aggregate, assistant and export queries.
+- [ ] 35. Query performance: **Partial**. Representative ledger, aggregate, vendor-spend and reminder `EXPLAIN ANALYZE` plans are recorded locally at seeded scale; production-scale plans and workload evidence remain open.
 - [ ] 36. Database indexes: **Partial**. Schema indexes exist; query-plan justification and production workload verification are missing.
-- [ ] 37. Frontend production audit: **Partial**. Build, responsive smoke flow, loading/error paths and main workflows exist; admin/conflict/expiry/429/accessibility/browser coverage remains open.
+- [ ] 37. Frontend production audit: **Partial**. Build, responsive smoke flow, focused accessibility semantics, admin/conflict/expiry and main workflows pass; axe/WCAG tooling, 429 paths and supported-browser coverage remain open.
 - [x] 38. Architecture documentation: **Done locally**. [ARCHITECTURE.md](../ARCHITECTURE.md) documents runtime, ledger, assistant, deployment and consistency boundaries.
 - [x] 39. Security documentation: **Done locally**. [SECURITY.md](../SECURITY.md) documents authentication, authorization, input/query safety, abuse controls, secrets and incidents.
 - [x] 40. Deployment documentation: **Done locally**. [DEPLOYMENT.md](../DEPLOYMENT.md) documents provisioning, roles, migrations, deployment, smoke checks and rollback expectations; execution remains external.
@@ -130,4 +130,4 @@ Status meanings: **Done** has repository or local test evidence; **Partial** has
 
 ### Current active item
 
-**Item 18: Gemini live integration and evaluation.** Direct provider calls pass with the local model configuration. The next step is a clean compiled `/assistant/ask` verification, then a representative safe/ambiguous/follow-up/adversarial question set; no key or provider credential belongs in Git or chat.
+**Item 18: Gemini live integration and evaluation.** The compiled deterministic `/assistant/ask` path now passes the representative local HTTP cases. Direct adapter contract/failure tests pass, but live provider evaluation, quota/outage cases and external provider policy verification remain open; no key or provider credential belongs in Git or chat.
