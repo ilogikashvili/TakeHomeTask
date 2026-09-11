@@ -3,6 +3,8 @@ import { Identity, json, Lookup } from './api';
 import { LedgerView } from './LedgerView';
 import { AssistantView } from './AssistantView';
 import { RemindersView } from './RemindersView';
+import { DetailView } from './DetailView';
+import { motion } from 'framer-motion';
 
 export default function App() {
   const [token, setToken] = useState(sessionStorage.getItem('ledger-token') || '');
@@ -11,7 +13,8 @@ export default function App() {
   const [vendors, setVendors] = useState<Lookup[]>([]);
   const [error, setError] = useState('');
   const [location, setLocation] = useState(window.location.pathname + window.location.search);
-  const tab = location.startsWith('/assistant') ? 'assistant' : location.startsWith('/reminders') ? 'reminders' : 'ledger';
+  const tab = location.startsWith('/ask') || location.startsWith('/assistant') ? 'assistant' : location.startsWith('/reminders') ? 'reminders' : 'ledger';
+  const detailMatch = location.match(/^\/ledger\/([0-9a-f-]+)$/i);
   function navigate(path: string) { history.pushState({}, '', path); setLocation(path); }
   function clearSession() { setToken(''); setUser(undefined); sessionStorage.removeItem('ledger-token'); }
   useEffect(() => { const expired = () => { clearSession(); setError('Your session expired. Please sign in again.'); }; window.addEventListener('session-expired', expired); return () => window.removeEventListener('session-expired', expired); }, []);
@@ -28,14 +31,17 @@ export default function App() {
   const ownerName = owners.find(owner => owner.id === user.ownerId)?.name || 'Workspace';
   return <div className="workspace">
     <aside className="sidebar"><a className="brand" href="/ledger" onClick={event => { event.preventDefault(); navigate('/ledger'); }}><span className="brand-icon">L</span>ledger<span className="brand-dot">.</span></a>
-      <span className="nav-label">WORKSPACE</span><nav aria-label="Main navigation">{(['ledger', 'assistant', 'reminders'] as const).map((name, index) => <a key={name} className={tab === name ? 'active' : ''} href={'/' + name} onClick={event => { event.preventDefault(); navigate('/' + name); }}><span aria-hidden>{['▤', '✧', '◷'][index]}</span>{name[0].toUpperCase() + name.slice(1)}</a>)}</nav>
+      <span className="nav-label">WORKSPACE</span><nav aria-label="Main navigation">{(['ledger', 'assistant', 'reminders'] as const).map((name, index) => { const path = name === 'assistant' ? '/ask' : '/' + name; return <a key={name} className={tab === name ? 'active' : ''} href={path} onClick={event => { event.preventDefault(); navigate(path); }}><span aria-hidden>{['▤', '✧', '◷'][index]}</span>{name[0].toUpperCase() + name.slice(1)}</a>; })}</nav>
       <div className="sidebar-note"><span className="live-dot"/> Connected workspace<p>One place for your subscriptions, spend, and upcoming renewals.</p></div>
       <div className="profile"><div className="avatar">{ownerName.slice(0, 1)}</div><div><strong>{ownerName}</strong><small>{user.role === 'admin' ? 'Administrator' : 'Owner access'}</small></div><button className="icon-button" title="Sign out" aria-label="Sign out" onClick={() => { void json('/auth/logout', token, { method: 'POST' }).catch(() => setError('Signed out locally; server session revocation could not be confirmed.')).finally(clearSession); }}>↗</button></div>
     </aside>
     <main><div className="topbar"><span>Workspace <span className="slash">/</span> {tab[0].toUpperCase() + tab.slice(1)}</span><span className="currency-label">GEL · Georgian lari</span></div>
-      {tab === 'ledger' && <LedgerView key={location} query={location.split('?')[1] || ''} token={token} user={user} owners={owners} vendors={vendors} navigate={navigate}/>}
-      {tab === 'assistant' && <AssistantView token={token} navigate={navigate}/>}
+      <motion.div key={location} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.18 }}>
+      {detailMatch && <DetailView id={detailMatch[1]} token={token} user={user} owners={owners} vendors={vendors} navigate={navigate}/>} 
+      {!detailMatch && tab === 'ledger' && <LedgerView key={location} query={location.split('?')[1] || ''} token={token} user={user} owners={owners} vendors={vendors} navigate={navigate}/>} 
+      {!detailMatch && tab === 'assistant' && <AssistantView token={token} navigate={navigate}/>} 
       {tab === 'reminders' && <RemindersView token={token} user={user} owners={owners}/>}
+      </motion.div>
     </main></div>;
 }
 

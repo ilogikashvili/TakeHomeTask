@@ -36,6 +36,7 @@ jobs:
       - run: npm run prisma:generate
       - run: npm test -- --runInBand
       - run: npm run test:e2e
+      - run: ROLE_TEST_ADMIN_URL="$TEST_DATABASE_ADMIN_URL" npm run test:roles
       - run: npm run lint
       - run: npm run build
       - run: npm ci
@@ -48,3 +49,8 @@ jobs:
         working-directory: frontend
       - run: npm test
         working-directory: frontend
+      # Keep this after browser tests: it requires TLS on the disposable DB.
+      - name: PostgreSQL TLS and production role contract
+        run: node scripts/ci-postgres-tls.cjs
+        env:
+          CI_POSTGRES_CONTAINER: ${{ job.services.postgres.id }}

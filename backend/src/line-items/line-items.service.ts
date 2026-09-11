@@ -23,6 +23,12 @@ export class LineItemsService {
 		});
 	}
 
+	async getDetail(id: string, user: AuthUser) {
+		const item = await this.repository.findById(id, user.role === 'owner' ? this.requireOwnerId(user) : undefined);
+		if (!item) throw new NotFoundException('Line item not found');
+		return item;
+	}
+
 	create(dto: CreateLineItemDto, user?: AuthUser) {
 		if (user?.role === 'owner' && dto.ownerId !== this.requireOwnerId(user)) throw new ForbiddenException('You cannot create data for another owner');
 		return this.repository.create(dto, this.actor(user));

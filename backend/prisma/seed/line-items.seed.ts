@@ -18,8 +18,11 @@ const statusPattern: LineItemStatus[] = [
   LineItemStatus.ACTIVE,
   LineItemStatus.ACTIVE,
   LineItemStatus.TERMINATED,
+  LineItemStatus.EXPIRING,
+  LineItemStatus.EXPIRED,
   LineItemStatus.ACTIVE,
 ];
+const categories = ['software', 'hardware', 'services', 'facilities', 'travel'];
 
 export async function seedLineItems(prisma: PrismaClient): Promise<void> {
   const [vendors, owners] = await Promise.all([
@@ -35,7 +38,8 @@ export async function seedLineItems(prisma: PrismaClient): Promise<void> {
   const lineItems = Array.from({ length: 2500 }, (_, index) => {
     const vendor = vendors[index % vendors.length];
     const owner = owners[(index * 7) % owners.length];
-    const categoryOffset = ['software', 'infrastructure', 'professional-services', 'operations', 'marketing'].indexOf(vendor.category);
+    const category = categories[index % categories.length];
+    const categoryOffset = categories.indexOf(category);
     const startDate = faker.date.between({ from: new Date('2022-01-01'), to: new Date(baseDate.getTime() - 30 * 86400000) });
     const endDate = new Date(startDate);
     endDate.setUTCDate(endDate.getUTCDate() + 365 + (index % 730));
@@ -51,15 +55,17 @@ export async function seedLineItems(prisma: PrismaClient): Promise<void> {
     return {
       vendorId: vendor.id,
       ownerId: owner.id,
-      name: `${vendor.category} subscription ${index + 1}`,
+      reference: `VC-${String(index + 1).padStart(5, '0')}`,
+      name: `${category} subscription ${index + 1}`,
       description: faker.company.catchPhrase(),
-      category: vendor.category,
+      category,
       status,
       billingPeriod: billingPeriods[index % billingPeriods.length],
       amount: faker.number.float({ min: 100, max: 250000, fractionDigits: 2 }),
       startDate,
       endDate,
       renewalDate,
+      autoRenew: index % 3 !== 0,
     };
   });
 
@@ -75,7 +81,7 @@ export async function seedLineItems(prisma: PrismaClient): Promise<void> {
       ? 1 + (index % 5)
       : lineItem.status === LineItemStatus.PENDING_APPROVAL
         ? (index % 3)
-        : lineItem.status === LineItemStatus.DRAFT
+        : lineItem.status === LineItemStatus.DRAFT || lineItem.status === LineItemStatus.EXPIRING || lineItem.status === LineItemStatus.EXPIRED
           ? (index % 2)
           : 0;
     return Array.from({ length: count }, (_, approvalIndex) => ({

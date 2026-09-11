@@ -172,4 +172,44 @@ describe('assistant task acceptance', () => {
     await prisma.lineItem.deleteMany({ where: { ownerId, name: { startsWith: 'ambiguous vendor ' } } });
     await prisma.vendor.deleteMany({ where: { name: { in: ['Microsoft', 'Microsoft Azure', 'Microsoft 365'] } } });
   });
+
+  it('compares services vendors across the current and previous quarter', async () => {
+    const now = new Date();
+    const quarter = Math.floor(now.getUTCMonth() / 3);
+    const currentStart = new Date(Date.UTC(now.getUTCFullYear(), quarter * 3, 1));
+    const previousStart = new Date(Date.UTC(now.getUTCFullYear(), quarter * 3 - 3, 1));
+    const currentVendor = await prisma.vendor.findFirstOrThrow();
+    const previousVendor = await prisma.vendor.findFirstOrThrow({ where: { id: { not: currentVendor.id } } });
+    const ids: string[] = [];
+    for (const fixture of [
+      { vendorId: currentVendor.id, amount: '300', startDate: currentStart },
+      { vendorId: currentVendor.id, amount: '100', startDate: previousStart },
+      { vendorId: previousVendor.id, amount: '50', startDate: currentStart },
+      { vendorId: previousVendor.id, amount: '100', startDate: previousStart },
+    ]) {
+      const item = await prisma.lineItem.create({ data: { ownerId, vendorId: fixture.vendorId, category: 'services', name: `quarter comparison ${randomUUID()}`, amount: fixture.amount, billingPeriod: 'MONTHLY', startDate: fixture.startDate, endDate: new Date(fixture.startDate.getTime() + 180 * 86400000) } });
+      ids.push(item.id);
+    }
+    try {
+      const response = await fetch(`${url}/assistant/ask`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` }, body: JSON.stringify({ question: 'Which vendors drove the increase in services spend this quarter compared to last?' }) });
+      const body = await response.json() as { status: string; comparison?: { changes: Array<{ vendorId: string; increase: number }> } };
+      expect(response.status).toBe(201);
+      expect(body.status).toBe('answered');
+      expect(body.comparison?.changes[0]).toMatchObject({ vendorId: currentVendor.id, increase: 200 });
+    } finally { await prisma.lineItem.deleteMany({ where: { id: { in: ids } } }); }
+  });
+
+  it('returns next-60-day renewals without qualifying approval history', async () => {
+    const renewalDate = new Date(Date.now() + 45 * 86400000);
+    const vendor = await prisma.vendor.findFirstOrThrow();
+    const item = await prisma.lineItem.create({ data: { ownerId, vendorId: vendor.id, category: 'services', name: `unapproved renewal ${randomUUID()}`, amount: 25, billingPeriod: 'MONTHLY', startDate: new Date('2025-01-01'), endDate: new Date('2030-01-01'), renewalDate, status: 'PENDING_APPROVAL' } });
+    try {
+      const response = await fetch(`${url}/assistant/ask`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` }, body: JSON.stringify({ question: 'What renews in the next 60 days that nobody has approved?' }) });
+      const body = await response.json() as { status: string; matchingLineItemIds?: string[]; filters?: { unapprovedOnly?: boolean } };
+      expect(response.status).toBe(201);
+      expect(body.status).toBe('answered');
+      expect(body.filters?.unapprovedOnly).toBe(true);
+      expect(body.matchingLineItemIds).toContain(item.id);
+    } finally { await prisma.lineItem.delete({ where: { id: item.id } }); }
+  });
 });

@@ -13,7 +13,7 @@ const nullable = (schema: SchemaObject): SchemaObject => ({ ...schema, nullable:
 const lookup = object({ id: uuid, name: text });
 const identity = object({ sub: text, role: { type: 'string', enum: ['owner', 'admin'] }, ownerId: uuid }, ['sub', 'role']);
 const row = object({ id: uuid, version: integer, vendorId: uuid, vendorName: text, ownerId: uuid, name: text, category: text,
-  status: { type: 'string', enum: ['DRAFT', 'ACTIVE', 'PENDING_APPROVAL', 'TERMINATED'] },
+  status: { type: 'string', enum: ['DRAFT', 'PENDING_APPROVAL', 'ACTIVE', 'EXPIRING', 'EXPIRED', 'TERMINATED'] },
   billingPeriod: { type: 'string', enum: ['WEEKLY', 'MONTHLY', 'QUARTERLY', 'ANNUAL'] }, amount,
   startDate: timestamp, endDate: timestamp, renewalDate: nullable(timestamp) });
 const mutation = object({ ...row.properties, description: nullable(text), deletedAt: nullable(timestamp), createdAt: timestamp, updatedAt: timestamp } as Record<string, SchemaObject>, Object.keys(row.properties!).filter(key => key !== 'vendorName'));
@@ -46,6 +46,7 @@ export function addApiContracts(document: OpenAPIObject): OpenAPIObject {
     'GET /owners': array(lookup),
     'GET /vendors': array(object({ id: uuid, name: text, category: text })),
     'GET /line-items': ledger,
+    'GET /line-items/{id}': mutation,
     'POST /line-items': mutation,
     'PATCH /line-items/{id}': mutation,
     'DELETE /line-items/{id}': object({ deleted: boolean }),
@@ -54,6 +55,9 @@ export function addApiContracts(document: OpenAPIObject): OpenAPIObject {
     'GET /reminders/unread': array(notification),
     'PATCH /reminders/{notificationId}/dismiss': object({ count: integer }),
     'POST /assistant/ask': assistant,
+    'POST /ask': assistant,
+    'GET /assistant/stream': text,
+    'GET /ask/stream': text,
     'GET /ops/metrics': object({ requests: integer, errors: integer, durationMs: { type: 'number' }, uptimeSeconds: { type: 'number' }, memoryBytes: integer }),
     'GET /ops/audits': array(object({ id: uuid, question: text, resolvedIntent: filters, generatedSql: nullable(text), parameters: nullable(filters),
       resultCount: integer, resultIds: array(uuid), durationMs: nullable(integer), model: nullable(text), requestId: nullable(text), createdAt: timestamp })),
@@ -63,7 +67,7 @@ export function addApiContracts(document: OpenAPIObject): OpenAPIObject {
       const operation = item[method];
       if (!operation) continue;
       const key = method.toUpperCase() + ' ' + path;
-      const mime = path === '/line-items/export' ? 'text/csv' : path === '/assistant/stream' ? 'text/event-stream' : 'application/json';
+      const mime = path === '/line-items/export' ? 'text/csv' : (path === '/assistant/stream' || path === '/ask/stream') ? 'text/event-stream' : 'application/json';
       const schema = mime === 'application/json' ? schemas[key] : text;
       if (!schema) throw new Error('Missing API response contract: ' + key);
       operation.responses[method === 'post' ? '201' : '200'] = { description: mime === 'text/event-stream' ? 'SSE progress, result (AssistantResult), or error events.' : 'Successful response', content: { [mime]: { schema } } };

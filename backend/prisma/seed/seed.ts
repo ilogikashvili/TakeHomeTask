@@ -24,15 +24,21 @@ async function seed(): Promise<void> {
   await seedVendors(prisma);
   await seedLineItems(prisma);
 
-  const [ownerCount, vendorCount, lineItemCount, activeCount, approvedActiveCount] = await Promise.all([
+  const [ownerCount, vendorCount, lineItemCount, activeCount, approvedActiveCount, categoryCounts, statusCounts] = await Promise.all([
     prisma.owner.count(),
     prisma.vendor.count(),
     prisma.lineItem.count(),
     prisma.lineItem.count({ where: { status: LineItemStatus.ACTIVE } }),
     prisma.lineItem.count({ where: { status: LineItemStatus.ACTIVE, approvals: { some: {} } } }),
+    prisma.lineItem.groupBy({ by: ['category'], _count: true }),
+    prisma.lineItem.groupBy({ by: ['status'], _count: true }),
   ]);
 
-  if (ownerCount !== 30 || vendorCount !== 200 || lineItemCount !== 2500 || activeCount !== approvedActiveCount) {
+  const requiredCategories = ['software', 'hardware', 'services', 'facilities', 'travel'];
+  const requiredStatuses = Object.values(LineItemStatus);
+  if (ownerCount !== 30 || vendorCount !== 200 || lineItemCount !== 2500 || activeCount !== approvedActiveCount
+    || requiredCategories.some(category => !categoryCounts.some(row => row.category === category))
+    || requiredStatuses.some(status => !statusCounts.some(row => row.status === status))) {
     throw new Error(`Seed validation failed: owners=${ownerCount}, vendors=${vendorCount}, lineItems=${lineItemCount}, active=${activeCount}, approvedActive=${approvedActiveCount}`);
   }
 }

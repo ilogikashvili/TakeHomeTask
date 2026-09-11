@@ -1,15 +1,15 @@
 import { z } from 'zod';
 
-const knownCategories = ['software', 'infrastructure', 'professional-services', 'operations', 'marketing'];
+const knownCategories = ['software', 'hardware', 'services', 'facilities', 'travel'];
 
 export const intentSchema = z.object({
-  intent: z.enum(['vendor_spend', 'category_spend', 'renewal_summary', 'unsupported']),
+  intent: z.enum(['vendor_spend', 'category_spend', 'services_increase', 'unapproved_renewals', 'renewal_summary', 'unsupported']),
   vendorText: z.string().trim().min(1).max(200).optional(),
   category: z.string().trim().min(1).max(100).optional(),
   annualize: z.boolean().default(false),
   amountMin: z.number().min(0).max(999999999999.99).optional(),
   amountMax: z.number().min(0).max(999999999999.99).optional(),
-  period: z.enum(['this_month', 'next_month', 'this_year', 'next_30_days']).optional(),
+  period: z.enum(['this_month', 'next_month', 'this_year', 'next_30_days', 'next_60_days']).optional(),
   year: z.number().int().min(1900).max(2200).optional(),
 }).strict();
   export const INTENT_SCHEMA_VERSION = 'intent-schema-v1';
@@ -40,14 +40,16 @@ export function resolveFollowup(question: string, previous?: ParsedIntent): Pars
 
 export function parseIntent(question: string): ParsedIntent {
   const text = question.toLowerCase().trim();
-  if (!/\b(spend|spending|cost|total|renew|renewal|renewals|renewing|contracts|subscriptions|pay|paid)\b/.test(text)) {
+  if (!/\b(spend|spending|cost|total|renew|renews|renewal|renewals|renewing|contracts|subscriptions|pay|paid)\b/.test(text)) {
     return { intent: 'unsupported', annualize: false };
   }
-  const categoryMatch = text.match(/\b(?:on|for|in)\s+(?:the\s+)?((?:software|infrastructure|professional-services|operations|marketing))\b/i);
+  const categoryMatch = text.match(/\b(?:on|for|in)\s+(?:the\s+)?((?:software|hardware|services|facilities|travel))\b/i);
   const category = categoryMatch ? categoryMatch[1].toLowerCase() : question.match(/\bcategory\s+([\w-]+)/i)?.[1]?.toLowerCase();
-  const intent = /renew/.test(text) ? 'renewal_summary' : category ? 'category_spend' : 'vendor_spend';
+  const intent = /which vendors drove the increase/.test(text) ? 'services_increase'
+    : /nobody has approved|not approved|without approval/.test(text) ? 'unapproved_renewals'
+      : /renew/.test(text) ? 'renewal_summary' : category ? 'category_spend' : 'vendor_spend';
   const quoted = question.match(/["“]([^"”]+)["”]/)?.[1];
-  const candidateVendor = question.match(/\b(?:on|with|for|vendor|pay|paid)\s+(?!the\s+)(?!software\b)(?!infrastructure\b)(?!professional-services\b)(?!operations\b)(?!marketing\b)(.+?)(?=\s*(?:this|next|in\s+\d{4}|annually|per\s+year|a year|yearly|[?.!]|$))/i)?.[1]?.trim();
+  const candidateVendor = question.match(/\b(?:on|with|for|vendor|pay|paid)\s+(?!the\s+)(?!software\b)(?!hardware\b)(?!services\b)(?!facilities\b)(?!travel\b)(.+?)(?=\s*(?:this|next|in\s+\d{4}|annually|per\s+year|a year|yearly|[?.!]|$))/i)?.[1]?.trim();
   const vendor = category ? undefined : quoted ?? candidateVendor;
   const amountMatch = text.match(/(?:over|above|more than|greater than|at least|>=)\s*(?:₾|gel)?\s*([0-9][0-9,]*(?:\.\d{1,2})?)/i);
   const amountMin = amountMatch ? parseCurrencyAmount(amountMatch[1]) : undefined;
@@ -56,7 +58,7 @@ export function parseIntent(question: string): ParsedIntent {
     category: category && knownCategories.includes(category) ? category : undefined,
     amountMin,
     period: text.includes('next month') ? 'next_month' : text.includes('this month') ? 'this_month'
-      : text.includes('this year') ? 'this_year' : /next 30 days/.test(text) ? 'next_30_days' : undefined,
+      : text.includes('this year') ? 'this_year' : /next 60 days/.test(text) ? 'next_60_days' : /next 30 days/.test(text) ? 'next_30_days' : undefined,
     year: /\b(?:19|20|21)\d{2}\b/.test(text) ? Number(text.match(/\b(?:19|20|21)\d{2}\b/)![0]) : undefined,
   });
 }
@@ -70,8 +72,8 @@ export function renewalWindow(intent: ParsedIntent, now = new Date()): { renewal
     const month = m + (intent.period === 'next_month' ? 1 : 0);
     return { renewalFrom: day(new Date(Date.UTC(y, month, 1))), renewalTo: day(new Date(Date.UTC(y, month + 1, 0))) };
   }
-  if (intent.intent === 'renewal_summary' || intent.period === 'next_30_days') {
-    return { renewalFrom: day(now), renewalTo: day(new Date(now.getTime() + 30 * 86400000)) };
+  if (intent.intent === 'renewal_summary' || intent.period === 'next_30_days' || intent.period === 'next_60_days') {
+    return { renewalFrom: day(now), renewalTo: day(new Date(now.getTime() + (intent.period === 'next_60_days' ? 60 : 30) * 86400000)) };
   }
   return undefined;
 }

@@ -3,6 +3,12 @@ import { IsEnum, IsNumber, IsOptional, IsString, IsUUID, Max, MaxLength, Min, Mi
 import { BillingPeriod } from '@prisma/client';
 
 export class CreateLineItemDto {
+	@IsOptional()
+	@IsString()
+	@MinLength(1)
+	@MaxLength(100)
+	reference?: string;
+
 	@IsUUID()
 	vendorId!: string;
 
@@ -19,9 +25,10 @@ export class CreateLineItemDto {
 	@MaxLength(100)
 	category!: string;
 
+	@IsOptional()
 	@IsString()
 	@MaxLength(2000)
-	description!: string;
+	description?: string;
 
 	@IsEnum(BillingPeriod)
 	billingPeriod!: BillingPeriod;
@@ -41,4 +48,7 @@ export class CreateLineItemDto {
 	@IsOptional()
 	@IsCalendarDate()
 	renewalDate?: string;
+
+	@IsOptional()
+	autoRenew?: boolean;
 }

@@ -1,7 +1,7 @@
 {
   "moduleFileExtensions": ["js", "json", "ts"],
   "rootDir": ".",
-  "testRegex": "test/e2e/.*\\.e2e-spec\\.ts$",
+  "testRegex": "test/roles/.*\\.spec\\.ts$",
   "transform": { "^.+\\.(t|j)s$": ["ts-jest", { "tsconfig": "<rootDir>/../tsconfig.json" }] },
   "testEnvironment": "node",
   "testTimeout": 30000

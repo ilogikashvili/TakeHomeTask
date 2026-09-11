@@ -4,6 +4,12 @@ import { IsEnum, IsInt, IsNumber, IsOptional, IsString, IsUUID, Max, MaxLength, 
 import { BillingPeriod, LineItemStatus } from '@prisma/client';
 
 export class UpdateLineItemDto {
+	@OptionalField()
+	@IsString()
+	@MinLength(1)
+	@MaxLength(100)
+	reference?: string;
+
 	@Type(() => Number)
 	@IsInt()
 	@Min(1)
@@ -51,6 +57,9 @@ export class UpdateLineItemDto {
 	@IsOptional()
 	@IsCalendarDate()
 	renewalDate?: string | null;
+
+	@OptionalField()
+	autoRenew?: boolean;
 
 	@OptionalField()
 	@IsEnum(LineItemStatus)

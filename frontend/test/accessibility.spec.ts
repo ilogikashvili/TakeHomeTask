@@ -9,6 +9,12 @@ test('major routes expose usable headings, labels, focus and live regions', asyn
 
   await expect(page.getByRole('heading', { name: 'Your ledger' })).toBeVisible();
   await expect(page.getByLabel('Search', { exact: true })).toBeVisible();
+    const token = await page.evaluate(() => sessionStorage.getItem('ledger-token')!);
+    const ledger = await (await page.request.get('/api/line-items', { headers: { authorization: `Bearer ${token}` } })).json();
+    await page.goto('/ledger/' + ledger.items[0].id);
+    await expect(page.getByRole('heading', { name: ledger.items[0].name })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Approval history' })).toBeVisible();
+    await page.goto('/ledger');
   await expect(page.locator('main button:focus, main a:focus, main input:focus, main select:focus')).toHaveCount(0);
   await page.keyboard.press('Tab');
   await expect(page.locator(':focus')).toBeVisible();
@@ -19,7 +25,7 @@ test('major routes expose usable headings, labels, focus and live regions', asyn
   await expect(page.getByRole('dialog').getByRole('button', { name: 'Close editor' })).toBeVisible();
   await page.getByRole('button', { name: 'Close editor' }).click();
 
-  await page.getByRole('link', { name: 'Assistant', exact: false }).click();
+    await page.getByRole('link', { name: 'Assistant', exact: false }).click();
   await expect(page.getByRole('heading', { name: 'A little clarity, on demand.' })).toBeVisible();
   await expect(page.locator('[aria-live="polite"]')).toHaveCount(1);
   await page.getByRole('link', { name: 'Reminders', exact: false }).click();

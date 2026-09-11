@@ -6,6 +6,7 @@ import { QueryAuditRepository } from './audit/query-audit.repository';
 import { AuthUser } from '../auth/auth.types';
 import { GeminiService } from './gemini.service';
 import { intentSchema, normalizeEntity, ParsedIntent, parseIntent, renewalWindow, resolveFollowup, vendorCandidates } from './graph/intent-parser';
+import { resolveIntentWithGraph } from './graph/runtime-assistant.graph';
 
 export function isMutationRequest(question: string): boolean {
   return /\b(drop|delete|update|insert|alter|truncate|create|grant|revoke|remove|reassign|approve|terminate|change)\b/i.test(question);
@@ -35,7 +36,7 @@ export class AssistantService {
     const followup = /^(and |what about |how about )/i.test(question.trim());
     const continuation = followup ? resolveFollowup(question, previous) : undefined;
     if (followup && !continuation) return { status: 'clarification_required', question: 'Please ask a complete question, or specify a renewal period such as next month.' };
-    const safeLocalIntent = continuation ?? parseIntent(question);
+    const safeLocalIntent = continuation ?? await resolveIntentWithGraph(question);
     let parsed: ParsedIntent;
     try {
       parsed = continuation ?? (this.gemini.enabled ? await this.gemini.interpret(question) : safeLocalIntent);
@@ -43,8 +44,10 @@ export class AssistantService {
     } catch {
       parsed = safeLocalIntent;
     }
+    if (parsed.intent === 'services_increase') return this.servicesIncrease(question, user);
+    if (parsed.intent === 'unapproved_renewals') return this.unapprovedRenewals(question, user);
     if (parsed.intent === 'unsupported') return { status: 'refused', answer: 'I support subscription spend totals, vendor/category totals, and renewal summaries.' };
-    if (parsed.intent !== 'renewal_summary' && (parsed.period || parsed.year)) {
+    if (!['renewal_summary', 'unapproved_renewals'].includes(parsed.intent) && (parsed.period || parsed.year)) {
       return { status: 'clarification_required', question: 'Do you mean contracts renewing in that period, or annualized recurring spend? Historical payments are not recorded in this ledger.' };
     }
     const query = Object.assign(new LedgerQueryDto(), renewalWindow(parsed));
@@ -102,4 +105,36 @@ export class AssistantService {
     return { status: 'answered', intent: parsed.intent, answer, filters: query, matchingLineItemIds,
       resultIdsComplete: !ledger.nextCursor, ledgerUrl: '/ledger?' + link, conversationId, ledger };
   }
+
+  private async servicesIncrease(question: string, user?: AuthUser) {
+    const now = new Date();
+    const quarter = Math.floor(now.getUTCMonth() / 3);
+    const currentStart = new Date(Date.UTC(now.getUTCFullYear(), quarter * 3, 1));
+    const previousStart = new Date(Date.UTC(now.getUTCFullYear(), quarter * 3 - 3, 1));
+    const currentEnd = new Date(Date.UTC(now.getUTCFullYear(), quarter * 3 + 3, 1));
+    const ownerFilter = user?.role === 'owner' ? { ownerId: user.ownerId } : {};
+    const [current, previous] = await Promise.all([
+      this.prisma.lineItem.groupBy({ by: ['vendorId'], where: { ...ownerFilter, category: 'services', deletedAt: null, startDate: { gte: currentStart, lt: currentEnd } }, _sum: { amount: true } }),
+      this.prisma.lineItem.groupBy({ by: ['vendorId'], where: { ...ownerFilter, category: 'services', deletedAt: null, startDate: { gte: previousStart, lt: currentStart } }, _sum: { amount: true } }),
+    ]);
+    const ids = [...new Set([...current, ...previous].map(row => row.vendorId))];
+    const vendors = await this.prisma.vendor.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } });
+    const names = new Map(vendors.map(vendor => [vendor.id, vendor.name]));
+    const previousByVendor = new Map(previous.map(row => [row.vendorId, Number(row._sum.amount ?? 0)]));
+    const changes = current.map(row => ({ vendorId: row.vendorId, vendorName: names.get(row.vendorId) ?? 'Unknown', current: Number(row._sum.amount ?? 0), previous: previousByVendor.get(row.vendorId) ?? 0, increase: Number(row._sum.amount ?? 0) - (previousByVendor.get(row.vendorId) ?? 0) }))
+      .sort((a, b) => b.increase - a.increase);
+    const query = Object.assign(new LedgerQueryDto(), { category: 'services', startFrom: currentStart.toISOString().slice(0, 10), startTo: new Date(currentEnd.getTime() - 86400000).toISOString().slice(0, 10) });
+    const ledger = await this.lineItems.getLedger(query, user, true);
+    return { status: 'answered', intent: parsedIntentName('services_increase'), answer: `Services spend comparison for the current quarter versus the previous quarter, ranked by vendor contribution to the increase.`, comparison: { currentStart, currentEnd, previousStart, changes }, matchingLineItemIds: ledger.items.map(item => item.id), resultIdsComplete: !ledger.nextCursor, ledgerUrl: '/ledger?' + new URLSearchParams(Object.entries(query).filter(([, value]) => value !== undefined).map(([key, value]) => [key, String(value)])), ledger };
+  }
+
+  private async unapprovedRenewals(question: string, user?: AuthUser) {
+    const parsed = parseIntent(question);
+    const query = Object.assign(new LedgerQueryDto(), renewalWindow(parsed));
+    query.unapprovedOnly = true;
+    const ledger = await this.lineItems.getLedger(query, user, true);
+    return { status: 'answered', intent: 'unapproved_renewals', answer: `Renewals in the next 60 days with no qualifying approval event.`, filters: query, matchingLineItemIds: ledger.items.map(item => item.id), resultIdsComplete: !ledger.nextCursor, ledgerUrl: '/ledger?' + new URLSearchParams(Object.entries(query).filter(([, value]) => value !== undefined).map(([key, value]) => [key, String(value)])), ledger };
+  }
 }
+
+function parsedIntentName(value: string): string { return value; }

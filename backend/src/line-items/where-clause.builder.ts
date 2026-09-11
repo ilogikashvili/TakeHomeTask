@@ -41,10 +41,13 @@ export function buildWhereClause(query: LedgerQueryDto = new LedgerQueryDto()): 
   if (query.ownerId) conditions.push(`li."ownerId" = ${addParameter(params, query.ownerId)}::uuid`);
   if (query.category) conditions.push(`li."category" = ${addParameter(params, query.category)}`);
   if (query.status) conditions.push(`li."status" = ${addParameter(params, query.status)}::"LineItemStatus"`);
+  if (query.unapprovedOnly) conditions.push('NOT EXISTS (SELECT 1 FROM "ApprovalEvent" ae WHERE ae."lineItemId" = li."id" AND ae."action" IN (\'APPROVED\', \'STATUS_CHANGED\') AND ae."toStatus" = \'ACTIVE\')');
   if (query.minAmount !== undefined) conditions.push(`li."amount" >= ${addParameter(params, String(query.minAmount))}::numeric`);
   if (query.maxAmount !== undefined) conditions.push(`li."amount" <= ${addParameter(params, String(query.maxAmount))}::numeric`);
   if (query.renewalFrom) conditions.push(`li."renewalDate" >= ${addParameter(params, query.renewalFrom)}::date`);
   if (query.renewalTo) conditions.push(`li."renewalDate" <= ${addParameter(params, query.renewalTo)}::date`);
+  if (query.startFrom) conditions.push(`li."startDate" >= ${addParameter(params, query.startFrom)}::date`);
+  if (query.startTo) conditions.push(`li."startDate" <= ${addParameter(params, query.startTo)}::date`);
   if (query.search) {
     const search = `%${query.search.trim()}%`;
     const placeholder = addParameter(params, search);
@@ -60,7 +63,7 @@ export function buildWhereClause(query: LedgerQueryDto = new LedgerQueryDto()): 
       if (sort === LedgerSortField.AMOUNT && !/^\d+(\.\d+)?$/.test(String(cursor.value))) throw new Error();
       if ((sort === LedgerSortField.START_DATE || sort === LedgerSortField.RENEWAL_DATE)
         && (!/^\d{4}-\d{2}-\d{2}$/.test(String(cursor.value)) || Number.isNaN(Date.parse(String(cursor.value))))) throw new Error();
-      if (sort === LedgerSortField.STATUS && !['DRAFT', 'ACTIVE', 'PENDING_APPROVAL', 'TERMINATED'].includes(String(cursor.value))) throw new Error();
+      if (sort === LedgerSortField.STATUS && !['DRAFT', 'ACTIVE', 'PENDING_APPROVAL', 'EXPIRING', 'EXPIRED', 'TERMINATED'].includes(String(cursor.value))) throw new Error();
     } catch {
       throw new BadRequestException('Invalid ledger cursor');
     }

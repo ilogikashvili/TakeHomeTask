@@ -1,7 +1,10 @@
 import { Transform } from 'class-transformer';
 import { registerDecorator, ValidateIf } from 'class-validator';
-export const OptionalField = () => ValidateIf((_object, value: unknown) => value !== undefined);
+
+export const OptionalField = () => ValidateIf((_object, value: unknown) => value !== undefined && value !== '');
+
 export const DecimalInput = () => Transform(({ value }: { value: unknown }) => typeof value === 'string' && /^\d+(\.\d+)?$/.test(value) ? Number(value) : value);
+
 export function IsCalendarDate(): PropertyDecorator {
   return (target, property) => registerDecorator({ name: 'isCalendarDate', target: target.constructor, propertyName: String(property),
     validator: {

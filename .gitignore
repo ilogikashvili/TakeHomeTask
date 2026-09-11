@@ -9,3 +9,7 @@ test-results/
 playwright-report/
 coverage/
 *.log
+*.key
+*.pem
+*.crt
+*.p12
